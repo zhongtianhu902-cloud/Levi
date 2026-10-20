@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="リヴァイ">
+<meta name="theme-color" content="#101418">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.png">
+<title>リヴァイ</title>
+<style>
+:root {
+  --bg: #f6f5f2; --card: #ffffff; --line: #e3e0da;
+  --text: #1c1d1f; --sub: #6b6d72; --muted: #9a9ca1;
+  --family: #2e8b57; --work: #1f7fa8; --union: #c8503c; --other: #7a7d85;
+  --warn: #c77700; --calm: #2e8b57; --hot: #c8503c;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101418; --card: #191e24; --line: #2a3038;
+    --text: #eef0f3; --sub: #a3a9b2; --muted: #6f7680;
+    --family: #5cc98a; --work: #5bb6dc; --union: #ec7d68; --other: #9aa0aa;
+    --warn: #f0a63a; --calm: #5cc98a; --hot: #ec7d68;
+  }
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--text);
+  font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  -webkit-text-size-adjust: 100%; overflow: hidden; }
+#pages { display: flex; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory;
+  scrollbar-width: none; overscroll-behavior-x: contain; }
+#pages::-webkit-scrollbar { display: none; }
+.page { flex: 0 0 100%; height: 100%; scroll-snap-align: start; overflow-y: auto;
+  padding: calc(env(safe-area-inset-top) + 18px) 18px calc(env(safe-area-inset-bottom) + 60px); }
+.head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; }
+.head h1 { font-size: 15px; font-weight: 600; color: var(--sub); letter-spacing: .05em; }
+.head .clock { font-size: 15px; color: var(--sub); font-variant-numeric: tabular-nums; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 18px; margin-bottom: 12px; }
+.label { font-size: 12px; color: var(--muted); letter-spacing: .08em; }
+.big { font-size: 26px; font-weight: 700; line-height: 1.3; margin: 6px 0 4px; }
+.mid { font-size: 20px; font-weight: 700; line-height: 1.35; margin: 4px 0; }
+.note { font-size: 14px; color: var(--sub); line-height: 1.6; }
+.count { font-size: 40px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; margin: 6px 0; }
+.cat { display: inline-block; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; color: #fff; vertical-align: middle; margin-right: 6px; }
+.c-family { background: var(--family); } .c-work { background: var(--work); }
+.c-union { background: var(--union); } .c-other { background: var(--other); }
+.t-family { color: var(--family); } .t-work { color: var(--work); } .t-union { color: var(--union); }
+.link { font-size: 14px; color: var(--sub); text-align: right; padding: 6px 4px; }
+.allday { font-size: 13px; color: var(--sub); margin-bottom: 10px; }
+.river { position: relative; margin-left: 52px; border-left: 2px solid var(--line); padding-left: 14px; }
+.ev, .gap, .nowline { position: relative; margin: 8px 0; }
+.ev .time, .gap .time { position: absolute; left: -68px; width: 48px; text-align: right; font-size: 13px; color: var(--sub); font-variant-numeric: tabular-nums; top: 12px; }
+.ev .box { background: var(--card); border: 1px solid var(--line); border-left: 5px solid var(--other); border-radius: 12px; padding: 10px 12px; }
+.ev.family .box { border-left-color: var(--family); } .ev.work .box { border-left-color: var(--work); }
+.ev.union .box { border-left-color: var(--union); } .ev.past { opacity: .45; }
+.ev.family .box .ttl { font-weight: 700; }
+.ev .ttl { font-size: 15px; } .ev .sub { font-size: 12px; color: var(--sub); margin-top: 2px; }
+.gap .box { border: 1.5px dashed var(--line); border-radius: 12px; padding: 10px 12px; color: var(--sub); font-size: 14px; }
+.gap .box b { color: var(--text); }
+.nowline { height: 0; border-top: 2px solid var(--hot); margin: 10px 0 10px -22px; }
+.nowline::before { content: "いま"; position: absolute; left: -46px; top: -9px; font-size: 11px; color: var(--hot); font-weight: 700; }
+.dl { margin-bottom: 18px; }
+.dl .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.dl .name { font-weight: 700; }
+.dl .left { font-size: 14px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bar { height: 10px; border-radius: 99px; background: var(--line); margin: 8px 0 4px; overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 99px; }
+.empty { text-align: center; color: var(--muted); padding: 40px 0; font-size: 15px; }
+#dots { position: fixed; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom) + 14px); display: flex; justify-content: center; gap: 8px; pointer-events: none; }
+#dots span { width: 7px; height: 7px; border-radius: 99px; background: var(--line); transition: all .2s; }
+#dots span.on { background: var(--sub); width: 20px; }
+#banner { display: none; font-size: 12px; color: var(--warn); margin-bottom: 10px; }
+#gear { background: none; border: 0; color: var(--muted); font-size: 18px; }
+#setup { display: none; position: fixed; inset: 0; background: var(--bg); padding: calc(env(safe-area-inset-top) + 24px) 20px; z-index: 5; }
+#setup input { width: 100%; font-size: 16px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--text); margin: 6px 0 14px; }
+#setup button { font-size: 16px; padding: 12px 18px; border-radius: 12px; border: 0; background: var(--text); color: var(--bg); margin-right: 8px; }
+</style>
+</head>
+<body>
+<div id="pages">
+  <section class="page" id="pA">
+    <div class="head"><h1>いま</h1><span><span class="clock" id="clock"></span> <button id="gear" aria-label="設定">⚙︎</button></span></div>
+    <div id="banner"></div>
+    <div id="A"></div>
+  </section>
+  <section class="page" id="pB">
+    <div class="head"><h1>今日の時間の川</h1><span class="clock" id="dateB"></span></div>
+    <div id="B"></div>
+  </section>
+  <section class="page" id="pC">
+    <div class="head"><h1>締切の地平線</h1></div>
+    <div id="C"></div>
+  </section>
+</div>
+<div id="dots"><span class="on"></span><span></span><span></span></div>
+
+<div id="setup">
+  <div class="mid">リヴァイの設定</div>
+  <p class="note" style="margin-bottom:16px">Apps ScriptのウェブアプリURLと合言葉を入れてください。この端末の中だけに保存します。</p>
+  <label class="label">ウェブアプリのURL</label>
+  <input id="inUrl" type="url" placeholder="https://script.google.com/macros/s/…/exec">
+  <label class="label">合言葉</label>
+  <input id="inKey" type="text" autocomplete="off">
+  <button id="save">保存</button><button id="cancel" style="background:var(--line);color:var(--text)">閉じる</button>
+</div>
+
+<script>
+// ---------- 設定 ----------
+const CAT_PREFIX = { '【家族】': 'family', '【仕事】': 'work', '【組合】': 'union' };
+const CAT_COLOR = { '10': 'family', '7': 'work', '11': 'union' };
+const CAT_NAME = { family: '家族', work: '仕事', union: '組合', other: 'その他' };
+const DEADLINE_RE = /締切|締め切り|〆切|しめきり|提出|期限|〆/;
+const WRAP_UP_MIN = 5;          // 予定の何分前に切り上げるか
+const DAY_START = 6, DAY_END = 22;
+const MIN_GAP = 15;             // これより短いすき間は出さない（分）
+
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+};
+
+// URLの#u=…&k=… で渡されたら保存する（ショートカットから開く用）
+(function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (p.get('u') && p.get('k')) {
+    store.set('levi_url', p.get('u')); store.set('levi_key', p.get('k'));
+    history.replaceState(null, '', location.pathname);
+  }
+})();
+
+// ---------- 道具 ----------
+const pad = n => String(n).padStart(2, '0');
+const hm = d => `${d.getHours()}:${pad(d.getMinutes())}`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+const startOfDay = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+function dur(min) {
+  min = Math.max(0, Math.round(min));
+  const h = Math.floor(min / 60), m = min % 60;
+  return h ? (m ? `${h}時間${m}分` : `${h}時間`) : `${m}分`;
+}
+function shape(raw) {
+  let title = raw.title || '(無題)', cat = 'other';
+  for (const p in CAT_PREFIX) if (title.startsWith(p)) { cat = CAT_PREFIX[p]; title = title.slice(p.length).trim(); }
+  if (cat === 'other' && CAT_COLOR[raw.color]) cat = CAT_COLOR[raw.color];
+  return { title, cat, start: new Date(raw.start), end: new Date(raw.end), allDay: !!raw.allDay,
+    location: raw.location || '', desc: raw.desc || '', deadline: DEADLINE_RE.test(title) };
+}
+const badge = c => `<span class="cat c-${c}">${CAT_NAME[c]}</span>`;
+
+// ---------- A「いま」 ----------
+function renderA(evs, now) {
+  const today = evs.filter(e => !e.allDay && sameDay(e.start, now));
+  const current = today.find(e => e.start <= now && now < e.end);
+  const next = evs.filter(e => !e.allDay && e.start > now).sort((a, b) => a.start - b.start)[0];
+  const deadlines = evs.filter(e => e.deadline && e.end > now).sort((a, b) => a.start - b.start);
+  let html = '';
+
+  // 今やること
+  let doNow, doNote;
+  if (current) {
+    doNow = current.title; doNote = `${hm(current.end)}まで（あと${dur((current.end - now) / 6e4)}）`;
+  } else if (next && (next.start - now) / 6e4 <= 180) {
+    doNow = `「${next.title}」の準備`;
+    doNote = next.location ? `場所：${esc(next.location)}` : 'とりあえず、持ち物と移動を確かめる';
+  } else if (deadlines[0]) {
+    doNow = `「${deadlines[0].title}」を少し進める`;
+    doNote = 'とりあえず15分だけ';
+  } else {
+    doNow = '決まった予定はなし'; doNote = '自分のための時間';
+  }
+  html += `<div class="card"><div class="label">いまやること</div><div class="big">${esc(doNow)}</div><div class="note">${doNote}</div></div>`;
+
+  // 次の約束
+  if (next) {
+    const wrap = new Date(next.start.getTime() - WRAP_UP_MIN * 6e4);
+    const left = (next.start - now) / 6e4;
+    const dayLabel = sameDay(next.start, now) ? '' : `${next.start.getMonth() + 1}/${next.start.getDate()} `;
+    html += `<div class="card"><div class="label">次の約束</div>
+      <div class="mid">${badge(next.cat)}<span class="t-${next.cat}">${dayLabel}${hm(next.start)} ${esc(next.title)}</span></div>
+      <div class="count">あと${dur(left)}</div>
+      <div class="note">${hm(wrap)}までに切り上げ</div></div>`;
+  }
+
+  const rest = today.filter(e => e.start > now).length;
+  html += `<div class="link" onclick="go(1)">今日の残り ${rest}件 ▸</div>`;
+  document.getElementById('A').innerHTML = html;
+}
+
+// ---------- B 今日の時間の川 ----------
+function renderB(evs, now) {
+  const d0 = startOfDay(now);
+  const today = evs.filter(e => sameDay(e.start, now) || (e.start < d0 && e.end > d0));
+  const allDay = today.filter(e => e.allDay);
+  const timed = today.filter(e => !e.allDay).sort((a, b) => a.start - b.start);
+  let html = '';
+  if (allDay.length) html += `<div class="allday">終日：${allDay.map(e => badge(e.cat) + esc(e.title)).join('　')}</div>`;
+
+  const dayStart = new Date(d0); dayStart.setHours(DAY_START);
+  const dayEnd = new Date(d0); dayEnd.setHours(DAY_END);
+  let cursor = dayStart, nowShown = false;
+  const items = [];
+  const pushGap = (a, b) => {
+    const from = a < now && now < b ? now : a;
+    if (b <= now) return;
+    const min = (b - from) / 6e4;
+    if (min >= MIN_GAP) items.push({ type: 'gap', from, to: b, min });
+  };
+  for (const e of timed) {
+    if (e.start > cursor) pushGap(cursor, e.start);
+    items.push({ type: 'ev', e });
+    if (e.end > cursor) cursor = e.end;
+  }
+  if (cursor < dayEnd) pushGap(cursor, dayEnd);
+
+  html += '<div class="river">';
+  for (const it of items) {
+    const t = it.type === 'ev' ? it.e.start : it.from;
+    if (!nowShown && t >= now) { html += '<div class="nowline"></div>'; nowShown = true; }
+    if (it.type === 'ev') {
+      const e = it.e, past = e.end <= now ? ' past' : '';
+      html += `<div class="ev ${e.cat}${past}"><span class="time">${hm(e.start)}</span><div class="box">
+        <div class="ttl">${esc(e.title)}</div><div class="sub">${hm(e.start)}–${hm(e.end)}${e.location ? '　' + esc(e.location) : ''}</div></div></div>`;
+    } else {
+      html += `<div class="gap"><span class="time">${hm(it.from)}</span><div class="box">すき間 <b>${dur(it.min)}</b>（${hm(it.from)}–${hm(it.to)}）</div></div>`;
+    }
+  }
+  if (!nowShown) html += '<div class="nowline"></div>';
+  html += '</div>';
+  if (!timed.length && !allDay.length) html = '<div class="empty">今日は決まった予定がありません</div>';
+  document.getElementById('B').innerHTML = html;
+  document.getElementById('dateB').textContent = `${now.getMonth() + 1}/${now.getDate()}(${'日月火水木金土'[now.getDay()]})`;
+}
+
+// ---------- C 締切の地平線 ----------
+function renderC(evs, now) {
+  const d0 = startOfDay(now);
+  const list = evs.filter(e => e.deadline && e.end > now).sort((a, b) => a.start - b.start);
+  if (!list.length) { document.getElementById('C').innerHTML = '<div class="empty">見えている締切はありません</div>'; return; }
+  let html = '';
+  for (const e of list) {
+    const days = Math.round((startOfDay(e.start) - d0) / 864e5);
+    const near = Math.max(0.06, Math.min(1, 1 - days / 30));
+    const color = days <= 3 ? 'var(--hot)' : days <= 7 ? 'var(--warn)' : 'var(--calm)';
+    const left = days <= 0 ? '今日' : days === 1 ? '明日' : `あと${days}日`;
+    const size = days <= 3 ? 20 : days <= 7 ? 17 : 15;
+    html += `<div class="dl"><div class="row"><span class="name" style="font-size:${size}px">${badge(e.cat)}${esc(e.title)}</span>
+      <span class="left" style="color:${color}">${left}</span></div>
+      <div class="bar"><i style="width:${near * 100}%;background:${color}"></i></div>
+      <div class="note">${e.start.getMonth() + 1}/${e.start.getDate()}(${'日月火水木金土'[e.start.getDay()]})${e.allDay ? '' : ' ' + hm(e.start)}　今日はここまで：ステップ2で入ります</div></div>`;
+  }
+  document.getElementById('C').innerHTML = html;
+}
+
+// ---------- データ ----------
+let EVENTS = [];
+function render() {
+  const now = new Date();
+  document.getElementById('clock').textContent = hm(now);
+  renderA(EVENTS, now); renderB(EVENTS, now); renderC(EVENTS, now);
+}
+async function load() {
+  const url = store.get('levi_url'), key = store.get('levi_key');
+  const banner = document.getElementById('banner');
+  if (!url || !key) {
+    EVENTS = demoEvents().map(shape);
+    banner.textContent = 'サンプル表示中（⚙︎から設定すると自分の予定になります）'; banner.style.display = 'block';
+    return render();
+  }
+  const cached = store.get('levi_cache');
+  if (cached) { try { EVENTS = JSON.parse(cached).events.map(shape); render(); } catch (e) {} }
+  try {
+    const res = await fetch(`${url}?k=${encodeURIComponent(key)}&t=${Date.now()}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    store.set('levi_cache', JSON.stringify(data));
+    EVENTS = data.events.map(shape); banner.style.display = 'none';
+  } catch (e) {
+    banner.textContent = cached ? '最新の予定を取れませんでした（前回の内容を表示中）' : '予定を取れませんでした。⚙︎で設定を確かめてください';
+    banner.style.display = 'block';
+  }
+  render();
+}
+
+// サンプル（設定前のプレビュー用）
+function demoEvents() {
+  const d = startOfDay(new Date());
+  const at = (day, h, m) => { const x = new Date(d); x.setDate(x.getDate() + day); x.setHours(h, m || 0); return x.toISOString(); };
+  const allDay = day => ({ start: at(day, 0), end: at(day + 1, 0), allDay: true });
+  return [
+    { title: '【仕事】職員朝会', start: at(0, 8, 10), end: at(0, 8, 25) },
+    { title: '【仕事】5年 社会（研究授業）', start: at(0, 10, 45), end: at(0, 11, 30), location: '5年1組' },
+    { title: '【仕事】職員会議', start: at(0, 15, 30), end: at(0, 16, 30), location: '会議室' },
+    { title: '【家族】お迎え', start: at(0, 18, 0), end: at(0, 18, 30), location: '保育園' },
+    { title: '【組合】分会会議', start: at(1, 16, 45), end: at(1, 17, 30) },
+    { title: '【家族】夕食（実家）', start: at(2, 18, 30), end: at(2, 20, 0) },
+    { title: '【仕事】研修資料 提出締切', ...allDay(2) },
+    { title: '【仕事】学年だより 締切', ...allDay(6) },
+    { title: '【組合】アンケート 提出期限', ...allDay(12) },
+    { title: '【仕事】通知表所見 提出', ...allDay(24) }
+  ];
+}
+
+// ---------- スワイプの点・設定 ----------
+const pages = document.getElementById('pages');
+function go(i) { pages.scrollTo({ left: i * pages.clientWidth, behavior: 'smooth' }); }
+function syncDots() {
+  const i = Math.round(pages.scrollLeft / pages.clientWidth);
+  document.querySelectorAll('#dots span').forEach((s, j) => s.classList.toggle('on', i === j));
+}
+pages.addEventListener('scroll', () => requestAnimationFrame(syncDots));
+const setup = document.getElementById('setup');
+document.getElementById('gear').onclick = () => {
+  document.getElementById('inUrl').value = store.get('levi_url') || '';
+  document.getElementById('inKey').value = store.get('levi_key') || '';
+  setup.style.display = 'block';
+};
+document.getElementById('cancel').onclick = () => { setup.style.display = 'none'; };
+document.getElementById('save').onclick = () => {
+  store.set('levi_url', document.getElementById('inUrl').value.trim());
+  store.set('levi_key', document.getElementById('inKey').value.trim());
+  setup.style.display = 'none'; load();
+};
+
+load();
+setInterval(render, 30 * 1000);       // 残り時間は30秒ごとに更新
+setInterval(load, 5 * 60 * 1000);     // 予定は5分ごとに取り直す
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+</script>
+</body>
+</html>
