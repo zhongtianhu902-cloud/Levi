@@ -276,13 +276,19 @@ async function load() {
   const cached = store.get('levi_cache');
   if (cached) { try { EVENTS = JSON.parse(cached).events.map(shape); render(); } catch (e) {} }
   try {
-    const res = await fetch(`${url}?k=${encodeURIComponent(key)}&t=${Date.now()}`);
-    const data = await res.json();
+    let data;
+    try {
+      const res = await fetch(`${url}?k=${encodeURIComponent(key)}&t=${Date.now()}`);
+      data = await res.json();
+    } catch (e) {
+      throw new Error('URLかアクセスできるユーザー（全員）を確かめてください');
+    }
+    if (data.error === 'unauthorized') throw new Error('合言葉が違います');
     if (data.error) throw new Error(data.error);
     store.set('levi_cache', JSON.stringify(data));
     EVENTS = data.events.map(shape); banner.style.display = 'none';
   } catch (e) {
-    banner.textContent = cached ? '最新の予定を取れませんでした（前回の内容を表示中）' : '予定を取れませんでした。⚙︎で設定を確かめてください';
+    banner.textContent = (cached ? '最新の予定を取れませんでした（前回の内容を表示中）：' : '予定を取れませんでした：') + e.message;
     banner.style.display = 'block';
   }
   render();
