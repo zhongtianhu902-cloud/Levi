@@ -13,7 +13,7 @@
 
 1. Apps Scriptに `gas/Code.gs` を貼り、`setup()` を1回実行して合言葉をログで確かめる
 2. デプロイ → 新しいデプロイ → ウェブアプリ（実行：自分／アクセス：全員）でURLを出す
-3. iPhoneで `https://zhongtianhu902-cloud.github.io/levi/#u=<URL>&k=<合言葉>` を開く（一度開けば端末に保存される）
+3. iPhoneで `https://zhongtianhu902-cloud.github.io/Levi/#u=<URL>&k=<合言葉>` を開く（一度開けば端末に保存される）
 4. 共有 → ホーム画面に追加
 5. 待機画面の右ボタン：待機画面を長押し → カスタマイズ → 右下のボタン → 「ショートカット」→ アプリ「リヴァイ」を開くショートカットを選ぶ
 
