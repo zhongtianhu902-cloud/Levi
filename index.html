@@ -162,6 +162,10 @@ function renderA(evs, now) {
   let doNow, doNote;
   if (current) {
     doNow = current.title; doNote = `${hm(current.end)}まで（あと${dur((current.end - now) / 6e4)}）`;
+  } else if (now.getHours() >= 21 || now.getHours() < 5) {
+    // 夜は進めさせない。明日の最初の約束だけ伝える
+    doNow = '今日はおしまい';
+    doNote = next && !sameDay(next.start, now) ? `明日は${hm(next.start)}「${esc(next.title)}」から` : 'ゆっくり休む';
   } else if (next && (next.start - now) / 6e4 <= 180) {
     doNow = `「${next.title}」の準備`;
     doNote = next.location ? `場所：${esc(next.location)}` : 'とりあえず、持ち物と移動を確かめる';
