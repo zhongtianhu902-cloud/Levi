@@ -353,7 +353,7 @@ const addDays = (d, n) => { const x = startOfDay(d); x.setDate(x.getDate() + n);
 
 function parseLine(text, now) {
   let s = text.normalize('NFKC').replace(/[〜～]/g, '~').trim();
-  const out = { raw: text.trim(), cat: null, date: null, start: null, end: null, deadline: false, mins: 30, title: '' };
+  const out = { raw: text.trim(), cat: null, date: null, start: null, end: null, deadline: false, mins: 30, title: '', ampm: false };
   const cut = re => { const m = s.match(re); if (m) s = s.replace(m[0], ' '); return m; };
 
   // 分類：先頭の【家族】や「仕事:」
@@ -391,7 +391,8 @@ function parseLine(text, now) {
   const toMin = t => {
     let h = +t[2]; const mm = t[3] ? +t[3] : t[4] ? 30 : t[5] ? +t[5] : 0;
     if (/午後|夕方|夜/.test(t[1] || '') && h < 12) h += 12;
-    else if (!t[1] && h >= 1 && h <= 6) h += 12; // 「3時」は15時とみる
+    else if (!t[1] && h >= 1 && h <= 4) h += 12; // 「3時」は15時とみる
+    else if (!t[1] && h >= 5 && h <= 7) out.ampm = true; // 「6時」は朝か夕方か聞く
     return h * 60 + mm;
   };
   const t1 = cut(T);
@@ -406,7 +407,7 @@ function parseLine(text, now) {
   if (DL_WORDS.test(s) || (out.date && out.start == null && /まで/.test(s))) out.deadline = true;
   cut(/までに|まで/);
 
-  out.title = s.replace(/\s+/g, ' ').trim().replace(/^(?:[\s、,.。:：に]|から|より)+|[\s、,.。]+$/g, '');
+  out.title = s.replace(/\s+/g, ' ').trim().replace(/(^|\s)[のにでへ](?=\s|$)/g, ' ').trim().replace(/^(?:[\s、,.。:：にの]|から|より)+|[\s、,.。]+$/g, '');
   if (!out.cat) {
     const hits = Object.keys(CAT_WORDS).filter(c => CAT_WORDS[c].test(out.title));
     // 組合の言葉は他と紛れにくいので先に決める。家族と仕事が両方出たら聞く
@@ -423,7 +424,7 @@ function missing(p) {
   if (!p.title) need.push('title');
   if (!p.date) need.push('date');
   if (!p.cat) need.push('cat');
-  if (!p.deadline && p.start == null) need.push('time');
+  if (!p.deadline && !p.allDay && (p.start == null || p.ampm)) need.push('time');
   return need;
 }
 
@@ -587,7 +588,7 @@ function renderDrafts() {
       <div class="chips${ask('time')}">
         <button class="chip${p.deadline ? ' on' : ''}" onclick="setP(${i},'deadline',${!p.deadline})">締切</button>
         ${p.deadline ? '' : `<button class="chip${p.allDay ? ' on' : ''}" onclick="setP(${i},'allDay',${!p.allDay})">終日</button>
-        ${p.allDay ? '' : `<input type="time" class="f sm" value="${p.start != null ? minStr(p.start) : ''}" onchange="setP(${i},'start',this.value)">
+        ${p.allDay ? '' : p.ampm ? [p.start, p.start + 720].map(m => `<button class="chip" onclick="setP(${i},'pick',${m})">${m < 720 ? '朝' : '夕方'} ${minStr(m)}</button>`).join('') + ' ' : ''}${p.allDay ? '' : `<input type="time" class="f sm" value="${p.start != null ? minStr(p.start) : ''}" onchange="setP(${i},'start',this.value)">
         〜 <input type="time" class="f sm" value="${p.end != null ? minStr(p.end) : ''}" onchange="setP(${i},'end',this.value)">`}`}</div>
       ${d.status === 'error' ? `<div class="note" style="color:var(--hot)">${esc(d.msg)}</div>` : ''}
       ${d.mode === 'edit' ? `<button class="btn" onclick="saveEdit(${i})" ${need.length || d.status === 'saving' ? 'disabled' : ''}>${d.status === 'saving' ? '直しています…' : '保存'}</button>
@@ -603,7 +604,8 @@ function setP(i, k, v) {
   const toMin = s => { if (!s) return null; const [h, m] = s.split(':').map(Number); return h * 60 + m; };
   if (k === 'date') p.date = addDays(new Date(), v);
   else if (k === 'dateStr') p.date = v ? new Date(v + 'T00:00') : null;
-  else if (k === 'start' || k === 'end') p[k] = toMin(v);
+  else if (k === 'start' || k === 'end') { p[k] = toMin(v); p.ampm = false; }
+  else if (k === 'pick') { p.start = v; p.ampm = false; }
   else if (k === 'deadline') { p.deadline = v; if (v && !DEADLINE_RE.test(p.title)) p.title += ' 締切'; if (!v) p.title = baseTitle(p.title); }
   else p[k] = v;
   d.dd = doDays(p, EVENTS, new Date());
