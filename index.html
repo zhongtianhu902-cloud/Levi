@@ -78,7 +78,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 #setup button { font-size: 16px; padding: 12px 18px; border-radius: 12px; border: 0; background: var(--text); color: var(--bg); margin-right: 8px; }
 #plus { position: fixed; right: 18px; bottom: calc(env(safe-area-inset-bottom) + 34px); width: 56px; height: 56px; border-radius: 99px; border: 0;
   background: var(--text); color: var(--bg); font-size: 30px; line-height: 56px; box-shadow: 0 4px 14px rgba(0,0,0,.18); z-index: 3; }
-#add { display: none; position: fixed; inset: 0; background: var(--bg); overflow-y: auto; z-index: 4;
+#add { display: none; position: fixed; inset: 0; background: var(--bg); overflow-y: auto; z-index: 6;
   padding: calc(env(safe-area-inset-top) + 18px) 18px calc(env(safe-area-inset-bottom) + 30px); }
 #inText { width: 100%; min-height: 84px; font-size: 17px; padding: 12px; border-radius: 14px; border: 1px solid var(--line);
   background: var(--card); color: var(--text); font-family: inherit; margin: 8px 0 10px; }
@@ -96,6 +96,47 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 .chip.cc-work.on { background: var(--work); border-color: var(--work); color: #fff; }
 .chip.cc-union.on { background: var(--union); border-color: var(--union); color: #fff; }
 .draft .link span { text-decoration: underline; }
+/* 月の暦（サブ画面） */
+.calbtn { background: none; border: 0; color: var(--sub); font-size: 17px; font-family: inherit; padding: 0 2px; }
+#cal { display: none; position: fixed; inset: 0; background: var(--bg); overflow-y: auto; z-index: 4;
+  padding: calc(env(safe-area-inset-top) + 18px) 16px calc(env(safe-area-inset-bottom) + 30px); }
+#cal .kf { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+#cal .kchip { font: inherit; font-size: 14px; padding: 6px 12px 6px 10px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); color: var(--text); display: inline-flex; align-items: center; gap: 6px; }
+#cal .kchip[aria-pressed="false"] { opacity: .4; }
+#cal .sw { width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+#cal .family { --c: var(--family); } #cal .work { --c: var(--work); } #cal .union { --c: var(--union); } #cal .other { --c: var(--other); }
+#cal h2 { font-size: 13px; letter-spacing: .12em; color: var(--sub); margin: 4px 0 8px; font-weight: 600; }
+#cal .hz { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 14px; scroll-snap-type: x proximity; }
+#cal .hz .kd { flex: 0 0 auto; scroll-snap-align: start; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; min-width: 130px; max-width: 200px; }
+#cal .hz .kd.near { border-color: var(--hot); }
+#cal .hz .n { font-weight: 700; line-height: 1; color: var(--c); font-variant-numeric: tabular-nums; }
+#cal .hz .n small { font-size: 13px; font-weight: 500; color: var(--sub); margin-left: 2px; }
+#cal .hz .w { font-size: 12px; color: var(--sub); }
+#cal .hz .t { font-size: 14px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+#cal .mtabs { display: flex; gap: 6px; overflow-x: auto; position: sticky; top: calc(-18px - env(safe-area-inset-top)); background: var(--bg); padding: 8px 0; z-index: 1; }
+#cal .mtab { font: inherit; font-size: 14px; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); color: var(--text); white-space: nowrap; }
+#cal .mtab .c { font-size: 11px; color: var(--muted); margin-left: 4px; }
+#cal .month { margin: 14px 0 26px; scroll-margin-top: 56px; }
+#cal .mhead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+#cal .mhead h3 { font-size: 20px; } #cal .mhead span { color: var(--sub); font-size: 13px; }
+#cal .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+#cal .dow { font-size: 11px; color: var(--muted); text-align: center; }
+#cal .dow.sun, #cal .day.sun .num { color: var(--hot); } #cal .dow.sat, #cal .day.sat .num { color: var(--work); }
+#cal .day { font: inherit; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 8px; min-height: 58px; padding: 4px; display: flex; flex-direction: column; gap: 3px; color: var(--text); min-width: 0; }
+#cal .day.out { visibility: hidden; } #cal .day.rest { background: var(--line); } #cal .day.past { opacity: .45; }
+#cal .day .num { font-size: 12px; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 4px; }
+#cal .day.today { border: 2px solid var(--text); }
+#cal .day.today .num b { background: var(--text); color: var(--bg); border-radius: 99px; padding: 0 5px; }
+#cal .day.sel { box-shadow: 0 0 0 2px var(--warn) inset; }
+#cal .flag { font-size: 10px; font-weight: 700; color: #fff; background: var(--hot); border-radius: 4px; padding: 0 3px; line-height: 1.4; }
+#cal .dots { display: flex; flex-wrap: wrap; gap: 3px; }
+#cal .dot { width: 7px; height: 7px; border-radius: 99px; background: var(--c); } #cal .dot.family { width: 9px; height: 9px; }
+#cal .det { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-top: 10px; }
+#cal .det h4 { font-size: 16px; margin-bottom: 8px; }
+#cal .det li { list-style: none; display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 10px; padding: 4px 0; }
+#cal .det .tm { font-size: 13px; color: var(--sub); font-variant-numeric: tabular-nums; }
+#cal .det .tt { border-left: 3px solid var(--c); padding-left: 8px; overflow-wrap: anywhere; }
+#cal .det .tt.family { font-weight: 600; }
 [data-id] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .pressing { transform: scale(.97); transition: transform .3s; }
 </style>
@@ -103,16 +144,16 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 <body>
 <div id="pages">
   <section class="page" id="pA">
-    <div class="head"><h1>いま</h1><span><span class="clock" id="clock"></span> <button id="gear" aria-label="設定">⚙︎</button></span></div>
+    <div class="head"><h1>いま</h1><span><span class="clock" id="clock"></span> <button class="calbtn" aria-label="月の暦">🗓</button> <button id="gear" aria-label="設定">⚙︎</button></span></div>
     <div id="banner"></div>
     <div id="A"></div>
   </section>
   <section class="page" id="pB">
-    <div class="head"><h1>今日の時間の川</h1><span class="clock" id="dateB"></span></div>
+    <div class="head"><h1>今日の時間の川</h1><span><span class="clock" id="dateB"></span> <button class="calbtn" aria-label="月の暦">🗓</button></span></div>
     <div id="B"></div>
   </section>
   <section class="page" id="pC">
-    <div class="head"><h1>締切の地平線</h1></div>
+    <div class="head"><h1>締切の地平線</h1><button class="calbtn" aria-label="月の暦">🗓 暦</button></div>
     <div id="C"></div>
   </section>
 </div>
@@ -125,6 +166,15 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
   <textarea id="inText" placeholder="なにを・いつ"></textarea>
   <button id="read" class="btn">読む</button>
   <div id="drafts" style="margin-top:16px"></div>
+</div>
+
+<div id="cal">
+  <div class="head"><h1>月の暦</h1><button id="calClose" class="btn ghost" style="margin:0;padding:6px 14px">閉じる</button></div>
+  <div class="kf" id="calF"></div>
+  <h2>締切の地平線</h2><div class="hz" id="calH"></div>
+  <nav class="mtabs" id="calT"></nav>
+  <div id="calM"></div>
+  <p class="note" style="font-size:12px">日をタップするとその日の予定。予定を長押しすると直せます。</p>
 </div>
 
 <div id="setup">
@@ -410,6 +460,7 @@ function render() {
   const now = new Date();
   document.getElementById('clock').textContent = hm(now);
   renderA(EVENTS, now); renderB(EVENTS, now); renderC(EVENTS, now);
+  if (calOpen) renderCal();
 }
 async function load() {
   const url = store.get('levi_url'), key = store.get('levi_key');
@@ -616,11 +667,81 @@ async function undo(i) {
   } catch (e) { d.msg = '取り消せませんでした：' + e.message; renderDrafts(); }
 }
 
+// ---------- 月の暦（サブ画面。🗓から開く） ----------
+const calEl = document.getElementById('cal');
+let calOpen = false, calSel = null;
+const calShow = { family: true, work: true, union: true, other: true };
+const REST_RE = /休業|休み|年休|振替/;
+document.querySelectorAll('.calbtn').forEach(b => b.onclick = () => {
+  calOpen = true; calSel = ymd(new Date()); renderCal(); calEl.style.display = 'block'; calEl.scrollTop = 0;
+});
+document.getElementById('calClose').onclick = () => { calOpen = false; calEl.style.display = 'none'; };
+
+function renderCal() {
+  const now = new Date(), today = ymd(now), t0 = startOfDay(now);
+  const vis = EVENTS.filter(e => calShow[e.cat]);
+  // 日ごとの索引（終日は終わりの日を含まない）
+  const byDay = {};
+  for (const e of vis) {
+    let d = startOfDay(e.start); const end = e.allDay ? e.end : addDays(e.start, 1);
+    for (let g = 0; d < end && g < 120; g++, d = addDays(d, 1)) (byDay[ymd(d)] ||= []).push(e);
+  }
+  const sorted = arr => arr.slice().sort((a, b) => (b.allDay - a.allDay) || ((a.cat === 'family' ? 0 : 1) - (b.cat === 'family' ? 0 : 1)) || (a.start - b.start));
+
+  // しぼり込み
+  const used = ['family', 'work', 'union'].concat(EVENTS.some(e => e.cat === 'other') ? ['other'] : []);
+  document.getElementById('calF').innerHTML = used.map(c =>
+    `<button class="kchip ${c}" aria-pressed="${calShow[c]}" onclick="calShow.${c}=!calShow.${c};renderCal()"><span class="sw"></span>${CAT_NAME[c]}</button>`).join('');
+
+  // 締切の地平線（横スクロール）
+  const dls = vis.filter(e => e.deadline && e.end > now).sort((a, b) => a.start - b.start);
+  document.getElementById('calH').innerHTML = dls.length ? dls.map(e => {
+    const left = Math.round((startOfDay(e.start) - t0) / 864e5);
+    return `<div class="kd ${e.cat}${left <= 7 ? ' near' : ''}" data-id="${esc(e.id)}"><div class="n" style="font-size:${Math.max(20, 40 - left * 0.45)}px">${left}<small>日</small></div>
+      <div class="w">${md(e.start)}</div><div class="t">${esc(e.title.replace(/^締切[:：]|^〆\s*/, ''))}</div></div>`;
+  }).join('') : '<p class="note">表示中の締切はありません</p>';
+
+  // 今月から6か月
+  let tabs = '', months = '';
+  for (let k = 0; k < 6; k++) {
+    const first = new Date(now.getFullYear(), now.getMonth() + k, 1), last = new Date(first.getFullYear(), first.getMonth() + 1, 0);
+    const id = 'cm' + k;
+    let count = 0, nd = 0;
+    for (let d = new Date(first); d <= last; d = addDays(d, 1)) {
+      const key = ymd(d); if (key < today) continue;
+      (byDay[key] || []).forEach(e => { if (ymd(e.start) === key) { count++; if (e.deadline) nd++; } });
+    }
+    tabs += `<button class="mtab" onclick="document.getElementById('${id}').scrollIntoView({behavior:'smooth'})">${first.getMonth() + 1}月<span class="c">${count}</span></button>`;
+    let g = WD.split('').map((w, j) => `<div class="dow${j === 0 ? ' sun' : j === 6 ? ' sat' : ''}">${w}</div>`).join('');
+    g += '<div class="day out"></div>'.repeat(first.getDay());
+    for (let d = new Date(first); d <= last; d = addDays(d, 1)) {
+      const key = ymd(d), evs = sorted(byDay[key] || []);
+      const cls = (d.getDay() === 0 ? ' sun' : d.getDay() === 6 ? ' sat' : '') + (key === today ? ' today' : '') + (key < today ? ' past' : '')
+        + (evs.some(e => REST_RE.test(e.title)) ? ' rest' : '') + (key === calSel ? ' sel' : '');
+      g += `<button class="day${cls}" onclick="calSel='${key}';renderCal()"><span class="num"><b>${d.getDate()}</b>${evs.some(e => e.deadline) ? '<span class="flag">〆</span>' : ''}</span>
+        <span class="dots">${evs.slice(0, 6).map(e => `<span class="dot ${e.cat}"></span>`).join('')}</span></button>`;
+    }
+    let det = '';
+    if (calSel && calSel.slice(0, 7) === ymd(first).slice(0, 7)) {
+      const sd = new Date(calSel + 'T00:00'), evs = sorted(byDay[calSel] || []);
+      det = `<div class="det"><h4>${md(sd)}${calSel === today ? '　今日' : ''}</h4>` + (evs.length ? '<ul>' + evs.map(e => {
+        let when = e.allDay ? '終日' : `${hm(e.start)}–${hm(e.end)}`;
+        if (e.allDay && e.end - e.start > 864e5) when = '〜' + md(addDays(e.end, -1));
+        return `<li data-id="${esc(e.id)}"><span class="tm">${when}</span><span class="tt ${e.cat}">${e.deadline ? '〆 ' : ''}${esc(e.title)}（${CAT_NAME[e.cat]}）</span></li>`;
+      }).join('') + '</ul>' : '<p class="note">予定はありません</p>') + '</div>';
+    }
+    months += `<section class="month" id="${id}"><div class="mhead"><h3>${first.getMonth() + 1}月</h3><span>${first.getFullYear()}年　予定 ${count}件${nd ? '・締切 ' + nd + '件' : ''}</span></div>
+      <div class="grid">${g}</div>${det}</section>`;
+  }
+  document.getElementById('calT').innerHTML = tabs;
+  document.getElementById('calM').innerHTML = months;
+}
+
 // ---------- 長押しで直す ----------
 let pressT = null, pressEl = null, pressXY = null;
 function pressEnd() { clearTimeout(pressT); pressT = null; if (pressEl) pressEl.classList.remove('pressing'); pressEl = null; }
 document.addEventListener('pointerdown', ev => {
-  const el = ev.target.closest('#pages [data-id]');
+  const el = ev.target.closest('#pages [data-id], #cal [data-id]');
   if (!el || !el.dataset.id) return;
   pressEl = el; pressXY = [ev.clientX, ev.clientY]; el.classList.add('pressing');
   pressT = setTimeout(() => { const id = el.dataset.id; pressEnd(); openEdit(id); }, 500);
@@ -630,6 +751,7 @@ document.addEventListener('pointermove', ev => {
 });
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => document.addEventListener(t, pressEnd));
 pages.addEventListener('scroll', pressEnd, { passive: true });
+document.getElementById('cal').addEventListener('scroll', pressEnd, { passive: true });
 document.addEventListener('contextmenu', ev => { if (ev.target.closest('[data-id]')) ev.preventDefault(); });
 
 function openEdit(id) {

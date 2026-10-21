@@ -18,7 +18,7 @@ const CATS = {
   union:  { prefix: '【組合】', color: '11' }  // Tomato
 };
 
-const DAYS_AHEAD = 60; // 締切の地平線のために60日先まで読む
+const DAYS_AHEAD = 190; // 月の暦のために半年先（約6か月）まで読む
 
 function doGet(e) {
   const key = PropertiesService.getScriptProperties().getProperty('LEVI_KEY');
