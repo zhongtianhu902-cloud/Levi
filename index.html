@@ -76,6 +76,28 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 #setup { display: none; position: fixed; inset: 0; background: var(--bg); padding: calc(env(safe-area-inset-top) + 24px) 20px; z-index: 5; }
 #setup input { width: 100%; font-size: 16px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--text); margin: 6px 0 14px; }
 #setup button { font-size: 16px; padding: 12px 18px; border-radius: 12px; border: 0; background: var(--text); color: var(--bg); margin-right: 8px; }
+#plus { position: fixed; right: 18px; bottom: calc(env(safe-area-inset-bottom) + 34px); width: 56px; height: 56px; border-radius: 99px; border: 0;
+  background: var(--text); color: var(--bg); font-size: 30px; line-height: 56px; box-shadow: 0 4px 14px rgba(0,0,0,.18); z-index: 3; }
+#add { display: none; position: fixed; inset: 0; background: var(--bg); overflow-y: auto; z-index: 4;
+  padding: calc(env(safe-area-inset-top) + 18px) 18px calc(env(safe-area-inset-bottom) + 30px); }
+#inText { width: 100%; min-height: 84px; font-size: 17px; padding: 12px; border-radius: 14px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text); font-family: inherit; margin: 8px 0 10px; }
+.btn { font-size: 16px; padding: 11px 18px; border-radius: 12px; border: 0; background: var(--text); color: var(--bg); margin: 10px 8px 0 0; font-family: inherit; }
+.btn.ghost { background: var(--line); color: var(--text); }
+.btn:disabled { opacity: .35; }
+.draft .f { width: 100%; font-size: 17px; font-weight: 700; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--bg); color: var(--text); margin: 8px 0 2px; font-family: inherit; }
+.draft .f.sm { width: auto; font-size: 15px; font-weight: 400; padding: 6px 8px; margin: 0; }
+.chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; padding: 4px; border-radius: 12px; font-size: 14px; color: var(--sub); }
+.ask { background: color-mix(in srgb, var(--warn) 16%, transparent); outline: 1.5px solid var(--warn); }
+.chip { font-size: 14px; padding: 6px 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--card); color: var(--text); font-family: inherit; }
+.chip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+.chip.cc-family.on { background: var(--family); border-color: var(--family); color: #fff; }
+.chip.cc-work.on { background: var(--work); border-color: var(--work); color: #fff; }
+.chip.cc-union.on { background: var(--union); border-color: var(--union); color: #fff; }
+.draft .link span { text-decoration: underline; }
+[data-id] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.pressing { transform: scale(.97); transition: transform .3s; }
 </style>
 </head>
 <body>
@@ -96,6 +118,15 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 </div>
 <div id="dots"><span class="on"></span><span></span><span></span></div>
 
+<button id="plus" aria-label="予定を入れる">＋</button>
+<div id="add">
+  <div class="head"><h1 id="addTitle">予定を入れる</h1><button id="addClose" class="btn ghost" style="margin:0;padding:6px 14px">閉じる</button></div>
+  <p class="note" id="addHint">一言でどうぞ。何行でも入れられます。<br>例：10/27までに初任研指導報告書修正　／　明日18時 みゆ迎え　／　来週火曜16:45 分会会議</p>
+  <textarea id="inText" placeholder="なにを・いつ"></textarea>
+  <button id="read" class="btn">読む</button>
+  <div id="drafts" style="margin-top:16px"></div>
+</div>
+
 <div id="setup">
   <div class="mid">リヴァイの設定</div>
   <p class="note" style="margin-bottom:16px">Apps ScriptのウェブアプリURLと合言葉を入れてください。この端末の中だけに保存します。</p>
@@ -110,6 +141,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 // ---------- 設定 ----------
 const CAT_PREFIX = { '【家族】': 'family', '【仕事】': 'work', '【組合】': 'union' };
 const CAT_COLOR = { '10': 'family', '7': 'work', '11': 'union' };
+const CAT_PREFIX_OF = { family: '【家族】', work: '【仕事】', union: '【組合】' };
 const CAT_NAME = { family: '家族', work: '仕事', union: '組合', other: 'その他' };
 const DEADLINE_RE = /締切|締め切り|〆切|しめきり|提出|期限|〆/;
 const WRAP_UP_MIN = 5;          // 予定の何分前に切り上げるか
@@ -145,8 +177,8 @@ function shape(raw) {
   let title = raw.title || '(無題)', cat = 'other';
   for (const p in CAT_PREFIX) if (title.startsWith(p)) { cat = CAT_PREFIX[p]; title = title.slice(p.length).trim(); }
   if (cat === 'other' && CAT_COLOR[raw.color]) cat = CAT_COLOR[raw.color];
-  return { title, cat, start: new Date(raw.start), end: new Date(raw.end), allDay: !!raw.allDay,
-    location: raw.location || '', desc: raw.desc || '', deadline: DEADLINE_RE.test(title) };
+  return { id: raw.id || '', title, cat, start: new Date(raw.start), end: new Date(raw.end), allDay: !!raw.allDay,
+    location: raw.location || '', desc: raw.desc || '', deadline: DEADLINE_RE.test(title) && !title.startsWith('▶') };
 }
 const badge = c => `<span class="cat c-${c}">${CAT_NAME[c]}</span>`;
 
@@ -182,7 +214,7 @@ function renderA(evs, now) {
     const wrap = new Date(next.start.getTime() - WRAP_UP_MIN * 6e4);
     const left = (next.start - now) / 6e4;
     const dayLabel = sameDay(next.start, now) ? '' : `${next.start.getMonth() + 1}/${next.start.getDate()} `;
-    html += `<div class="card"><div class="label">次の約束</div>
+    html += `<div class="card" data-id="${esc(next.id)}"><div class="label">次の約束</div>
       <div class="mid">${badge(next.cat)}<span class="t-${next.cat}">${dayLabel}${hm(next.start)} ${esc(next.title)}</span></div>
       <div class="count">あと${dur(left)}</div>
       <div class="note">${hm(wrap)}までに切り上げ</div></div>`;
@@ -225,7 +257,7 @@ function renderB(evs, now) {
     if (!nowShown && t >= now) { html += '<div class="nowline"></div>'; nowShown = true; }
     if (it.type === 'ev') {
       const e = it.e, past = e.end <= now ? ' past' : '';
-      html += `<div class="ev ${e.cat}${past}"><span class="time">${hm(e.start)}</span><div class="box">
+      html += `<div class="ev ${e.cat}${past}" data-id="${esc(e.id)}"><span class="time">${hm(e.start)}</span><div class="box">
         <div class="ttl">${esc(e.title)}</div><div class="sub">${hm(e.start)}–${hm(e.end)}${e.location ? '　' + esc(e.location) : ''}</div></div></div>`;
     } else {
       html += `<div class="gap"><span class="time">${hm(it.from)}</span><div class="box">すき間 <b>${dur(it.min)}</b>（${hm(it.from)}–${hm(it.to)}）</div></div>`;
@@ -250,12 +282,126 @@ function renderC(evs, now) {
     const color = days <= 3 ? 'var(--hot)' : days <= 7 ? 'var(--warn)' : 'var(--calm)';
     const left = days <= 0 ? '今日' : days === 1 ? '明日' : `あと${days}日`;
     const size = days <= 3 ? 20 : days <= 7 ? 17 : 15;
-    html += `<div class="dl"><div class="row"><span class="name" style="font-size:${size}px">${badge(e.cat)}${esc(e.title)}</span>
+    html += `<div class="dl" data-id="${esc(e.id)}"><div class="row"><span class="name" style="font-size:${size}px">${badge(e.cat)}${esc(e.title)}</span>
       <span class="left" style="color:${color}">${left}</span></div>
       <div class="bar"><i style="width:${near * 100}%;background:${color}"></i></div>
-      <div class="note">${e.start.getMonth() + 1}/${e.start.getDate()}(${'日月火水木金土'[e.start.getDay()]})${e.allDay ? '' : ' ' + hm(e.start)}　今日はここまで：ステップ2で入ります</div></div>`;
+      <div class="note">${e.start.getMonth() + 1}/${e.start.getDate()}(${'日月火水木金土'[e.start.getDay()]})${e.allDay ? '' : ' ' + hm(e.start)}　${nextDo(e, now)}</div></div>`;
   }
   document.getElementById('C').innerHTML = html;
+}
+
+// ---------- 一言を読む（ルール） ----------
+const CAT_WORDS = {
+  family: /家族|みゆ|妻|嫁|子ども|子供|息子|娘|迎え|送り|保育園|幼稚園|こども園|降園|ピアノ|実家|誕生日|病院|歯医者|小児科|散髪|買い物|弁当|旅行|帰省/,
+  union: /組合|分会|支部|教組|執行委員|組織委員|マルタイ|定期大会|青年部|女性部/,
+  work: /学校|職員|会議|授業|研修|初任研|報告書|校長|教頭|学年|児童|保護者|指導|研究|行事|委員会|校務|教務|通知表|所見|学級|出張|PTA|運動会|参観|面談|起案|文書|主任|巡回|給食/
+};
+const DL_WORDS = /までに|締切|締め切り|〆切|しめきり|期限|提出/;
+const WD = '日月火水木金土';
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const addDays = (d, n) => { const x = startOfDay(d); x.setDate(x.getDate() + n); return x; };
+
+function parseLine(text, now) {
+  let s = text.normalize('NFKC').replace(/[〜～]/g, '~').trim();
+  const out = { raw: text.trim(), cat: null, date: null, start: null, end: null, deadline: false, mins: 30, title: '' };
+  const cut = re => { const m = s.match(re); if (m) s = s.replace(m[0], ' '); return m; };
+
+  // 分類：先頭の【家族】や「仕事:」
+  let m = cut(/^【?(家族|仕事|組合)】?\s*[:：]?\s*/);
+  if (m) out.cat = { 家族: 'family', 仕事: 'work', 組合: 'union' }[m[1]];
+
+  // 日付
+  const today = startOfDay(now);
+  if ((m = cut(/(?:(\d{4})[\/年])?(\d{1,2})[\/月](\d{1,2})日?/))) {
+    const y = m[1] ? +m[1] : now.getFullYear();
+    let d = new Date(y, +m[2] - 1, +m[3]);
+    if (!m[1] && d < addDays(today, -60)) d = new Date(y + 1, +m[2] - 1, +m[3]);
+    out.date = d;
+  } else if ((m = cut(/明後日|あさって/))) out.date = addDays(today, 2);
+  else if ((m = cut(/明日|あした|あす/))) out.date = addDays(today, 1);
+  else if ((m = cut(/今日|きょう|本日/))) out.date = today;
+  else if ((m = cut(/(再来週|来週|今週)?の?([日月火水木金土])曜日?/))) {
+    const want = WD.indexOf(m[2]), mon = addDays(today, -((today.getDay() + 6) % 7));
+    if (m[1]) {
+      const wk = { 今週: 0, 来週: 7, 再来週: 14 }[m[1]];
+      out.date = addDays(mon, wk + (want + 6) % 7);
+    } else out.date = addDays(today, (want - today.getDay() + 7) % 7);
+  } else if ((m = cut(/(\d{1,2})日(?!間)/))) {
+    let d = new Date(now.getFullYear(), now.getMonth(), +m[1]);
+    if (d < today) d = new Date(now.getFullYear(), now.getMonth() + 1, +m[1]);
+    out.date = d;
+  }
+  cut(/[(（][日月火水木金土](?:曜日?)?[)）]/);
+
+  // 作業時間「30分くらい」「1時間」（時刻より先に取る）
+  if ((m = cut(/(\d+)\s*(?:(分)|時間)(?:くらい|ほど|ぐらい)/) || cut(/(\d+)\s*時間/))) out.mins = +m[1] * (m[2] ? 1 : 60);
+
+  // 時刻（「〜17時」があれば終わり）
+  const T = /(午前|午後|朝|夕方|夜)?\s*(\d{1,2})(?::(\d{2})|時(?:(半)|(\d{1,2})分)?)/;
+  const toMin = t => {
+    let h = +t[2]; const mm = t[3] ? +t[3] : t[4] ? 30 : t[5] ? +t[5] : 0;
+    if (/午後|夕方|夜/.test(t[1] || '') && h < 12) h += 12;
+    else if (!t[1] && h >= 1 && h <= 6) h += 12; // 「3時」は15時とみる
+    return h * 60 + mm;
+  };
+  const t1 = cut(T);
+  if (t1) {
+    out.start = toMin(t1);
+    const t2 = s.match(new RegExp('^\\s*(?:~|-|から|ー)\\s*' + T.source));
+    if (t2) { s = s.replace(t2[0], ' '); out.end = toMin(t2); }
+  }
+  if (out.start == null && (m = cut(/(?:~|から)\s*(\d{1,2})時/))) out.end = +m[1] * 60;
+
+  // 締切か
+  if (DL_WORDS.test(s) || (out.date && out.start == null && /まで/.test(s))) out.deadline = true;
+  cut(/までに|まで/);
+
+  out.title = s.replace(/\s+/g, ' ').trim().replace(/^(?:[\s、,.。:：に]|から|より)+|[\s、,.。]+$/g, '');
+  if (!out.cat) {
+    const hits = Object.keys(CAT_WORDS).filter(c => CAT_WORDS[c].test(out.title));
+    // 組合の言葉は他と紛れにくいので先に決める。家族と仕事が両方出たら聞く
+    if (hits.includes('union')) out.cat = 'union';
+    else if (hits.length === 1) out.cat = hits[0];
+  }
+  if (out.deadline && !DEADLINE_RE.test(out.title)) out.title += ' 締切';
+  return out;
+}
+
+// 足りないものを数える（これが空なら、そのまま登録してよい）
+function missing(p) {
+  const need = [];
+  if (!p.title) need.push('title');
+  if (!p.date) need.push('date');
+  if (!p.cat) need.push('cat');
+  if (!p.deadline && p.start == null) need.push('time');
+  return need;
+}
+
+// 締切の前に「やる日」を2つまで置く（空いている時間に、作業時間ぶん）
+function doDays(p, evs, now) {
+  if (!p.deadline || !p.date) return [];
+  const last = addDays(p.date, -1), days = [];
+  for (let d = startOfDay(now); d <= last; d = addDays(d, 1)) days.push(d);
+  if (!days.length) return [];
+  const picks = days.length === 1 ? [days[0]] : [days[Math.floor((days.length - 1) / 2)], days[days.length - 1]];
+  const out = [];
+  for (const d of [...new Set(picks)]) {
+    const weekend = d.getDay() === 0 || d.getDay() === 6;
+    let from = new Date(d); from.setHours(weekend ? 9 : 16, weekend ? 0 : 30, 0, 0);
+    const until = new Date(d); until.setHours(21, 0, 0, 0);
+    if (from < now) { from = new Date(now); from.setMinutes(Math.ceil(from.getMinutes() / 15) * 15, 0, 0); }
+    const busy = evs.filter(e => !e.allDay && e.end > from && e.start < until).sort((a, b) => a.start - b.start);
+    for (const e of busy) { if ((e.start - from) / 6e4 >= p.mins) break; if (e.end > from) from = new Date(e.end); }
+    if ((until - from) / 6e4 >= p.mins) out.push({ start: from, end: new Date(from.getTime() + p.mins * 6e4) });
+  }
+  return out;
+}
+
+// 締切の次の「やる日」（＋から入れた ▶ の予定）
+function nextDo(e, now) {
+  const want = '▶ ' + baseTitle(e.title);
+  const x = EVENTS.filter(v => v.title === want && v.end > now).sort((a, b) => a.start - b.start)[0];
+  return x ? `次のやる日：${sameDay(x.start, now) ? '今日' : md(x.start)} ${hm(x.start)}` : 'やる日はまだ';
 }
 
 // ---------- データ ----------
@@ -269,7 +415,7 @@ async function load() {
   const url = store.get('levi_url'), key = store.get('levi_key');
   const banner = document.getElementById('banner');
   if (!url || !key) {
-    EVENTS = demoEvents().map(shape);
+    EVENTS = demoEvents().map((r, j) => shape({ id: 'demo-s' + j, ...r }));
     banner.textContent = 'サンプル表示中（⚙︎から設定すると自分の予定になります）'; banner.style.display = 'block';
     return render();
   }
@@ -333,6 +479,190 @@ document.getElementById('save').onclick = () => {
   store.set('levi_key', document.getElementById('inKey').value.trim());
   setup.style.display = 'none'; load();
 };
+
+// ---------- 予定を入れる（＋） ----------
+const sheet = document.getElementById('add');
+const inText = document.getElementById('inText');
+let DRAFTS = [];
+const md = d => `${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})`;
+const atMin = (d, min) => { const x = startOfDay(d); x.setMinutes(min); return x; };
+const minStr = min => `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;
+const baseTitle = t => t.replace(/\s*(締切|締め切り|〆切|しめきり|期限)$/, '');
+
+const showInput = on => {
+  ['inText', 'read', 'addHint'].forEach(x => { document.getElementById(x).style.display = on ? '' : 'none'; });
+  document.getElementById('addTitle').textContent = on ? '予定を入れる' : '予定を直す';
+};
+document.getElementById('plus').onclick = () => {
+  DRAFTS = DRAFTS.filter(d => d.mode !== 'edit'); renderDrafts();
+  showInput(true); sheet.style.display = 'block'; inText.focus();
+};
+document.getElementById('addClose').onclick = () => { sheet.style.display = 'none'; };
+document.getElementById('read').onclick = () => {
+  const now = new Date();
+  const lines = inText.value.split(/\n+/).map(x => x.trim()).filter(Boolean);
+  if (!lines.length) return;
+  const fresh = lines.map(l => {
+    const p = parseLine(l, now);
+    return { p, status: 'edit', ids: [], dd: doDays(p, EVENTS, now), ddOn: [], msg: '' };
+  });
+  DRAFTS = fresh.concat(DRAFTS.filter(d => d.status === 'done'));
+  inText.value = '';
+  renderDrafts();
+  fresh.filter(d => !missing(d.p).length).forEach(save); // はっきりしたものはそのまま入れる
+};
+
+function renderDrafts() {
+  document.getElementById('drafts').innerHTML = DRAFTS.map((d, i) => {
+    const p = d.p, need = missing(p);
+    const ask = k => need.includes(k) ? ' ask' : '';
+    if (d.status === 'done') {
+      const when = p.deadline ? `${md(p.date)} 締切` : p.allDay ? `${md(p.date)} 終日` : `${md(p.date)} ${minStr(p.start)}`;
+      const dd = d.dd.length && !d.ddIds ? `<div class="label" style="margin-top:12px">やる日の候補（押すと選ぶ）</div>
+        <div class="chips">${d.dd.map((x, j) => `<button class="chip${d.ddOn.includes(j) ? ' on' : ''}" onclick="toggleDD(${i},${j})">${md(x.start)} ${hm(x.start)}–${hm(x.end)}</button>`).join('')}</div>
+        <button class="btn" onclick="saveDD(${i})" ${d.ddOn.length ? '' : 'disabled'}>やる日も入れる</button>` :
+        d.ddIds ? `<div class="note">やる日 ${d.ddIds.length}つ入れました</div>` : '';
+      return `<div class="card draft"><div class="label">入れました ✓${d.msg ? '　' + esc(d.msg) : ''}</div>
+        <div class="mid">${badge(p.cat)}${esc(p.title)}</div><div class="note">${when}</div>${dd}
+        <div class="link"><span onclick="undo(${i})">取り消す</span></div></div>`;
+    }
+    return `<div class="card draft">
+      <div class="label">${d.mode === 'edit' ? '予定を直す' : need.length ? 'ここだけ教えてください' : '読み取った内容'}</div>
+      <input class="f${ask('title')}" value="${esc(p.title)}" placeholder="なにを" onchange="setP(${i},'title',this.value)">
+      <div class="chips${ask('cat')}">${['family', 'work', 'union'].map(c => `<button class="chip cc-${c}${p.cat === c ? ' on' : ''}" onclick="setP(${i},'cat','${c}')">${CAT_NAME[c]}</button>`).join('')}</div>
+      <div class="chips${ask('date')}">${[0, 1, 2].map(n => { const x = addDays(new Date(), n);
+        return `<button class="chip${p.date && sameDay(p.date, x) ? ' on' : ''}" onclick="setP(${i},'date',${n})">${['今日', '明日', '明後日'][n]}</button>`; }).join('')}
+        <input type="date" class="f sm" value="${p.date ? ymd(p.date) : ''}" onchange="setP(${i},'dateStr',this.value)"></div>
+      <div class="chips${ask('time')}">
+        <button class="chip${p.deadline ? ' on' : ''}" onclick="setP(${i},'deadline',${!p.deadline})">締切</button>
+        ${p.deadline ? '' : `<button class="chip${p.allDay ? ' on' : ''}" onclick="setP(${i},'allDay',${!p.allDay})">終日</button>
+        ${p.allDay ? '' : `<input type="time" class="f sm" value="${p.start != null ? minStr(p.start) : ''}" onchange="setP(${i},'start',this.value)">
+        〜 <input type="time" class="f sm" value="${p.end != null ? minStr(p.end) : ''}" onchange="setP(${i},'end',this.value)">`}`}</div>
+      ${d.status === 'error' ? `<div class="note" style="color:var(--hot)">${esc(d.msg)}</div>` : ''}
+      ${d.mode === 'edit' ? `<button class="btn" onclick="saveEdit(${i})" ${need.length || d.status === 'saving' ? 'disabled' : ''}>${d.status === 'saving' ? '直しています…' : '保存'}</button>
+      <button class="btn ghost" onclick="removeEv(${i})">削除</button>
+      <button class="btn ghost" onclick="DRAFTS.splice(${i},1);renderDrafts();sheet.style.display='none'">閉じる</button>` :
+      `<button class="btn" onclick="save(DRAFTS[${i}])" ${need.length || d.status === 'saving' ? 'disabled' : ''}>${d.status === 'saving' ? '入れています…' : '登録'}</button>
+      <button class="btn ghost" onclick="DRAFTS.splice(${i},1);renderDrafts()">やめる</button>`}</div>`;
+  }).join('');
+}
+
+function setP(i, k, v) {
+  const d = DRAFTS[i], p = d.p;
+  const toMin = s => { if (!s) return null; const [h, m] = s.split(':').map(Number); return h * 60 + m; };
+  if (k === 'date') p.date = addDays(new Date(), v);
+  else if (k === 'dateStr') p.date = v ? new Date(v + 'T00:00') : null;
+  else if (k === 'start' || k === 'end') p[k] = toMin(v);
+  else if (k === 'deadline') { p.deadline = v; if (v && !DEADLINE_RE.test(p.title)) p.title += ' 締切'; if (!v) p.title = baseTitle(p.title); }
+  else p[k] = v;
+  d.dd = doDays(p, EVENTS, new Date());
+  renderDrafts();
+}
+
+// カレンダーに入れる形にする
+function toItem(p) {
+  if (p.deadline || p.allDay) return { title: p.title, cat: p.cat, allDay: true, date: ymd(p.date) };
+  const s = atMin(p.date, p.start), e = p.end != null && p.end > p.start ? atMin(p.date, p.end) : new Date(s.getTime() + 60 * 6e4);
+  return { title: p.title, cat: p.cat, allDay: false, start: s.toISOString(), end: e.toISOString() };
+}
+async function post(body) {
+  const url = store.get('levi_url'), key = store.get('levi_key');
+  if (!url || !key) return { ok: true, demo: true, ids: (body.items || []).map(() => 'demo' + Math.random()) };
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ k: key, ...body }) });
+  const data = await res.json();
+  if (data.error === 'unauthorized') throw new Error('合言葉が違います');
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+// 画面にもすぐ出す（カレンダーからの取り直しを待たない）
+function addLocal(items, ids) {
+  items.forEach((it, j) => EVENTS.push(shape({ id: ids[j], title: (CAT_PREFIX_OF[it.cat] || '') + it.title, allDay: it.allDay,
+    start: it.allDay ? new Date(it.date + 'T00:00').toISOString() : it.start,
+    end: it.allDay ? addDays(new Date(it.date + 'T00:00'), 1).toISOString() : it.end })));
+  render();
+}
+async function save(d) {
+  d.status = 'saving'; renderDrafts();
+  try {
+    const items = [toItem(d.p)];
+    const r = await post({ action: 'add', items });
+    d.ids = r.ids; d.status = 'done'; d.msg = r.demo ? 'サンプル表示中なのでカレンダーには入りません' : '';
+    addLocal(items, r.ids);
+  } catch (e) {
+    d.status = 'error'; d.msg = errMsg(e);
+  }
+  renderDrafts();
+}
+function toggleDD(i, j) {
+  const on = DRAFTS[i].ddOn, k = on.indexOf(j);
+  k < 0 ? on.push(j) : on.splice(k, 1);
+  renderDrafts();
+}
+async function saveDD(i) {
+  const d = DRAFTS[i];
+  const items = d.ddOn.map(j => d.dd[j]).map(x => ({ title: '▶ ' + baseTitle(d.p.title), cat: d.p.cat, allDay: false, start: x.start.toISOString(), end: x.end.toISOString() }));
+  try {
+    const r = await post({ action: 'add', items });
+    d.ddIds = r.ids; addLocal(items, r.ids);
+  } catch (e) { d.msg = e.message; }
+  renderDrafts();
+}
+async function undo(i) {
+  const d = DRAFTS[i], ids = d.ids.concat(d.ddIds || []);
+  try {
+    await post({ action: 'delete', ids });
+    EVENTS = EVENTS.filter(e => !ids.includes(e.id));
+    DRAFTS.splice(i, 1); renderDrafts(); render();
+  } catch (e) { d.msg = '取り消せませんでした：' + e.message; renderDrafts(); }
+}
+
+// ---------- 長押しで直す ----------
+let pressT = null, pressEl = null, pressXY = null;
+function pressEnd() { clearTimeout(pressT); pressT = null; if (pressEl) pressEl.classList.remove('pressing'); pressEl = null; }
+document.addEventListener('pointerdown', ev => {
+  const el = ev.target.closest('#pages [data-id]');
+  if (!el || !el.dataset.id) return;
+  pressEl = el; pressXY = [ev.clientX, ev.clientY]; el.classList.add('pressing');
+  pressT = setTimeout(() => { const id = el.dataset.id; pressEnd(); openEdit(id); }, 500);
+});
+document.addEventListener('pointermove', ev => {
+  if (pressEl && Math.hypot(ev.clientX - pressXY[0], ev.clientY - pressXY[1]) > 10) pressEnd();
+});
+['pointerup', 'pointercancel', 'pointerleave'].forEach(t => document.addEventListener(t, pressEnd));
+pages.addEventListener('scroll', pressEnd, { passive: true });
+document.addEventListener('contextmenu', ev => { if (ev.target.closest('[data-id]')) ev.preventDefault(); });
+
+function openEdit(id) {
+  const e = EVENTS.find(x => x.id === id);
+  if (!e) return;
+  const mins = d => d.getHours() * 60 + d.getMinutes();
+  const p = { title: e.title, cat: e.cat === 'other' ? null : e.cat, date: startOfDay(e.start), allDay: e.allDay,
+    deadline: e.deadline && e.allDay, start: e.allDay ? null : mins(e.start), end: e.allDay ? null : mins(e.end), mins: 30 };
+  DRAFTS = [{ p, mode: 'edit', id, status: 'edit', ids: [], dd: [], ddOn: [], msg: '' }];
+  renderDrafts();
+  showInput(false); sheet.style.display = 'block';
+}
+async function saveEdit(i) {
+  const d = DRAFTS[i];
+  d.status = 'saving'; renderDrafts();
+  try {
+    const it = { id: d.id, ...toItem(d.p) };
+    if (!d.id.startsWith('demo') && store.get('levi_url')) await post({ action: 'update', item: it });
+    EVENTS = EVENTS.filter(e => e.id !== d.id);
+    addLocal([it], [d.id]);
+    DRAFTS.splice(i, 1); renderDrafts(); sheet.style.display = 'none';
+  } catch (e) { d.status = 'error'; d.msg = errMsg(e); renderDrafts(); }
+}
+async function removeEv(i) {
+  const d = DRAFTS[i];
+  if (!confirm(`「${d.p.title}」を消します。よろしいですか？`)) return;
+  try {
+    if (store.get('levi_url')) await post({ action: 'delete', ids: [d.id], any: true });
+    EVENTS = EVENTS.filter(e => e.id !== d.id);
+    DRAFTS.splice(i, 1); renderDrafts(); render(); sheet.style.display = 'none';
+  } catch (e) { d.status = 'error'; d.msg = errMsg(e); renderDrafts(); }
+}
+const errMsg = e => /JSON|fetch|Load failed/i.test(e.message) ? 'Apps Scriptを新しいバージョンでデプロイし直してください' : e.message;
 
 load();
 setInterval(render, 30 * 1000);       // 残り時間は30秒ごとに更新
