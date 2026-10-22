@@ -141,6 +141,34 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 #cal .det .tm { font-size: 13px; color: var(--sub); font-variant-numeric: tabular-nums; }
 #cal .det .tt { border-left: 3px solid var(--c); padding-left: 8px; overflow-wrap: anywhere; }
 #cal .det .tt.family { font-weight: 600; }
+#toast { display: none; position: fixed; left: 16px; right: 16px; bottom: calc(env(safe-area-inset-bottom) + 100px); z-index: 9;
+  background: var(--text); color: var(--bg); border-radius: 14px; padding: 12px 14px; font-size: 14px; line-height: 1.5; }
+/* 暦：スマホは日ごとの一覧、広い画面は月の暦（予定名つき） */
+#cal .chipsx { display: none; flex-direction: column; gap: 2px; min-width: 0; }
+#cal .evx { font-size: 11px; line-height: 1.3; padding: 1px 4px; border-radius: 4px; border-left: 3px solid var(--c); background: var(--bg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#cal .evx.family { font-weight: 600; }
+#cal .more { font-size: 11px; color: var(--sub); }
+#cal .addday { font: inherit; font-size: 14px; margin-top: 10px; padding: 8px 14px; border-radius: 99px; border: 1px dashed var(--sub); background: none; color: var(--text); }
+#cal .agenda { display: none; background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+#cal .aday { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; padding: 8px 12px; border-top: 1px solid var(--line); }
+#cal .aday:first-child { border-top: 0; }
+#cal .aday.rest { background: var(--line); }
+#cal .aday.today { box-shadow: inset 4px 0 0 var(--text); }
+#cal .adate { font: inherit; background: none; border: 0; color: var(--text); display: grid; justify-items: center; align-content: start; line-height: 1.1; font-variant-numeric: tabular-nums; padding: 2px 0; }
+#cal .adate b { font-size: 20px; } #cal .adate span { font-size: 12px; color: var(--sub); }
+#cal .adate .plus { font-size: 12px; color: var(--muted); margin-top: 2px; }
+#cal .aday.sun .adate b { color: var(--hot); } #cal .aday.sat .adate b { color: var(--work); }
+#cal .adate .flag { margin-top: 4px; }
+#cal .aevs { display: grid; gap: 6px; min-width: 0; align-content: center; }
+#cal .aev { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; font-size: 14px; line-height: 1.4; }
+#cal .aev .tm { font-size: 12px; color: var(--sub); padding-top: 2px; font-variant-numeric: tabular-nums; }
+#cal .aev .tt { border-left: 3px solid var(--c); padding-left: 8px; overflow-wrap: anywhere; }
+#cal .aev .tt.family { font-weight: 600; }
+#cal .aev .tt.dlx { color: var(--hot); font-weight: 700; border-left-color: var(--hot); }
+#cal .aday.empty { padding: 4px 12px; } #cal .aday.empty .adate b { font-size: 15px; color: var(--muted); }
+#cal .aday.empty .aevs { color: var(--muted); font-size: 12px; }
+@media (max-width: 759px) { #cal .grid, #cal .det { display: none; } #cal .agenda { display: grid; } }
+@media (min-width: 760px) { #cal .day { min-height: 96px; padding: 6px; } #cal .dots { display: none; } #cal .chipsx { display: flex; } }
 [data-id] { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .pressing { transform: scale(.97); transition: transform .3s; }
 </style>
@@ -164,9 +192,11 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 <div id="dots"><span class="on"></span><span></span><span></span></div>
 
 <button id="plus" aria-label="予定を入れる">＋</button>
+<div id="toast" role="status"></div>
 <div id="add">
   <div class="head"><h1 id="addTitle">予定を入れる</h1><button id="addClose" class="btn ghost" style="margin:0;padding:6px 14px">閉じる</button></div>
   <p class="note" id="addHint">一言でどうぞ。何行でも入れられます。<br>例：10/27までに初任研指導報告書修正　／　明日18時 みゆ迎え　／　来週火曜16:45 分会会議</p>
+  <p class="note" id="addPreset" style="display:none;margin-top:10px;color:var(--text)"></p>
   <textarea id="inText" placeholder="なにを・いつ"></textarea>
   <button id="read" class="btn">読む</button>
   <div id="drafts" style="margin-top:16px"></div>
@@ -178,7 +208,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
   <h2>締切の地平線</h2><div class="hz" id="calH"></div>
   <nav class="mtabs" id="calT"></nav>
   <div id="calM"></div>
-  <p class="note" style="font-size:12px">日をタップするとその日の予定。予定を長押しすると直せます。</p>
+  <p class="note" style="font-size:12px">日付を押すと、その日に予定を入れられます。予定を長押しすると直せます。</p>
 </div>
 
 <div id="setup">
@@ -245,23 +275,23 @@ function renderA(evs, now) {
   let html = '';
 
   // 今やること
-  let doNow, doNote;
+  let doNow, doNote, doId = '';
   const todayDo = today.filter(e => isDo(e) && e.start > now).sort((a, b) => a.start - b.start)[0];
   if (current) {
-    doNow = doName(current); doNote = `${hm(current.end)}まで（あと${dur((current.end - now) / 6e4)}）`;
+    doId = current.id; doNow = doName(current); doNote = `${hm(current.end)}まで（あと${dur((current.end - now) / 6e4)}）`;
     if (stageOf(current)) doNote = `とりあえずここまで：${esc(stageOf(current))}<br>${doNote}`;
   } else if (now.getHours() >= 21 || now.getHours() < 5) {
     // 夜は進めさせない。明日の最初の約束だけ伝える
     doNow = '今日はおしまい';
     doNote = next && !sameDay(next.start, now) ? `明日は${hm(next.start)}「${esc(next.title)}」から` : 'ゆっくり休む';
   } else if (next && isDo(next) && (next.start - now) / 6e4 <= 180) {
-    doNow = `${hm(next.start)}から「${doName(next)}」`;
+    doId = next.id; doNow = `${hm(next.start)}から「${doName(next)}」`;
     doNote = `${dur((next.end - next.start) / 6e4)}。とりあえずここまで：${esc(stageOf(next) || '手をつける')}`;
   } else if (next && (next.start - now) / 6e4 <= 180) {
     doNow = `「${next.title}」の準備`;
     doNote = next.location ? `場所：${esc(next.location)}` : 'とりあえず、持ち物と移動を確かめる';
   } else if (todayDo) {
-    doNow = `${hm(todayDo.start)}から「${doName(todayDo)}」`;
+    doId = todayDo.id; doNow = `${hm(todayDo.start)}から「${doName(todayDo)}」`;
     doNote = `とりあえずここまで：${esc(stageOf(todayDo) || '手をつける')}`;
   } else if (deadlines[0]) {
     doNow = `「${deadlines[0].title}」を少し進める`;
@@ -269,7 +299,7 @@ function renderA(evs, now) {
   } else {
     doNow = '決まった予定はなし'; doNote = '自分のための時間';
   }
-  html += `<div class="card"><div class="label">いまやること</div><div class="big">${esc(doNow)}</div><div class="note">${doNote}</div></div>`;
+  html += `<div class="card"${doId !== '' ? ` data-id="${esc(doId)}"` : ''}><div class="label">いまやること</div><div class="big">${esc(doNow)}</div><div class="note">${doNote}</div></div>`;
 
   // 次の約束
   if (next) {
@@ -624,13 +654,20 @@ const minStr = min => `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;
 const baseTitle = t => t.replace(/^(締切|〆切|期限)[:：]\s*|^〆\s*/, '').replace(/\s*(締切|締め切り|〆切|しめきり|期限)$/, '').trim();
 
 const showInput = on => {
-  ['inText', 'read', 'addHint'].forEach(x => { document.getElementById(x).style.display = on ? '' : 'none'; });
+  ['inText', 'read', 'addHint', 'addPreset'].forEach(x => { document.getElementById(x).style.display = on ? '' : 'none'; });
   document.getElementById('addTitle').textContent = on ? '予定を入れる' : '予定を直す';
 };
-document.getElementById('plus').onclick = () => {
+// 予定を入れる画面を開く。暦の日付から開いたときは、その日を決めておく
+let presetDate = null;
+function openAdd(dateKey) {
+  presetDate = dateKey ? new Date(dateKey + 'T00:00') : null;
+  const pre = document.getElementById('addPreset');
+  pre.innerHTML = presetDate ? `<b>${md(presetDate)}</b> に入れます（日付を書けば、そちらが優先）` : '';
+  pre.style.display = presetDate ? 'block' : 'none';
   DRAFTS = DRAFTS.filter(d => d.mode !== 'edit'); renderDrafts();
   showInput(true); sheet.style.display = 'block'; inText.focus();
-};
+}
+document.getElementById('plus').onclick = () => openAdd(null);
 document.getElementById('addClose').onclick = () => { sheet.style.display = 'none'; };
 document.getElementById('read').onclick = () => {
   const now = new Date();
@@ -638,6 +675,7 @@ document.getElementById('read').onclick = () => {
   if (!lines.length) return;
   const fresh = lines.map(l => {
     const p = parseLine(l, now);
+    if (!p.date && presetDate) p.date = presetDate;
     return { p, status: 'edit', ids: [], msg: '' };
   });
   DRAFTS = fresh.concat(DRAFTS.filter(d => d.status === 'done'));
@@ -792,7 +830,8 @@ function renderCal() {
       const cls = (d.getDay() === 0 ? ' sun' : d.getDay() === 6 ? ' sat' : '') + (key === today ? ' today' : '') + (key < today ? ' past' : '')
         + (evs.some(e => REST_RE.test(e.title)) ? ' rest' : '') + (key === calSel ? ' sel' : '');
       g += `<button class="day${cls}" onclick="calSel='${key}';renderCal()"><span class="num"><b>${d.getDate()}</b>${evs.some(e => e.deadline) ? '<span class="flag">〆</span>' : ''}</span>
-        <span class="dots">${evs.slice(0, 6).map(e => `<span class="dot ${e.cat}"></span>`).join('')}</span></button>`;
+        <span class="dots">${evs.slice(0, 6).map(e => `<span class="dot ${e.cat}"></span>`).join('')}</span>
+        <span class="chipsx">${evs.slice(0, 3).map(e => `<span class="evx ${e.cat}">${e.allDay ? '' : hm(e.start) + ' '}${esc(e.title)}</span>`).join('')}${evs.length > 3 ? `<span class="more">ほか${evs.length - 3}件</span>` : ''}</span></button>`;
     }
     let det = '';
     if (calSel && calSel.slice(0, 7) === ymd(first).slice(0, 7)) {
@@ -801,10 +840,25 @@ function renderCal() {
         let when = e.allDay ? '終日' : `${hm(e.start)}–${hm(e.end)}`;
         if (e.allDay && e.end - e.start > 864e5) when = '〜' + md(addDays(e.end, -1));
         return `<li data-id="${esc(e.id)}"><span class="tm">${when}</span><span class="tt ${e.cat}">${e.deadline ? '〆 ' : ''}${esc(e.title)}（${CAT_NAME[e.cat]}）</span></li>`;
-      }).join('') + '</ul>' : '<p class="note">予定はありません</p>') + '</div>';
+      }).join('') + '</ul>' : '<p class="note">予定はありません</p>')
+        + `<button class="addday" onclick="openAdd('${calSel}')">＋ この日に予定を入れる</button></div>`;
+    }
+    // スマホ：日ごとの一覧。日付を押すとその日に予定を入れる
+    let ag = '';
+    for (let d = new Date(first); d <= last; d = addDays(d, 1)) {
+      const key = ymd(d); if (key < today) continue;
+      const evs = sorted(byDay[key] || []);
+      const cls = (d.getDay() === 0 ? ' sun' : d.getDay() === 6 ? ' sat' : '') + (key === today ? ' today' : '')
+        + (evs.some(e => REST_RE.test(e.title)) ? ' rest' : '') + (evs.length ? '' : ' empty');
+      ag += `<div class="aday${cls}"><button class="adate" onclick="openAdd('${key}')" aria-label="${md(d)}に予定を入れる"><b>${d.getDate()}</b><span>${WD[d.getDay()]}${key === today ? '・今日' : ''}</span>${evs.some(e => e.deadline) ? '<span class="flag">〆</span>' : ''}${evs.length ? '<span class="plus">＋</span>' : ''}</button>
+        <div class="aevs">${evs.length ? evs.map(e => {
+          let when = e.allDay ? '終日' : `${hm(e.start)}–${hm(e.end)}`;
+          if (e.allDay && e.end - e.start > 864e5) when = '〜' + md(addDays(e.end, -1)).replace(/\(.\)/, '');
+          return `<div class="aev" data-id="${esc(e.id)}"><span class="tm">${when}</span><span class="tt ${e.cat}${e.deadline ? ' dlx' : ''}">${e.deadline ? '〆 ' : ''}${esc(e.title)}</span></div>`;
+        }).join('') : '<span onclick="openAdd(\'' + key + '\')">＋</span>'}</div></div>`;
     }
     months += `<section class="month" id="${id}"><div class="mhead"><h3>${first.getMonth() + 1}月</h3><span>${first.getFullYear()}年　予定 ${count}件${nd ? '・締切 ' + nd + '件' : ''}</span></div>
-      <div class="grid">${g}</div>${det}</section>`;
+      <div class="grid">${g}</div>${det}<div class="agenda">${ag || '<p class="note" style="padding:12px">この月の予定はありません</p>'}</div></section>`;
   }
   document.getElementById('calT').innerHTML = tabs;
   document.getElementById('calM').innerHTML = months;
@@ -815,9 +869,14 @@ let pressT = null, pressEl = null, pressXY = null;
 function pressEnd() { clearTimeout(pressT); pressT = null; if (pressEl) pressEl.classList.remove('pressing'); pressEl = null; }
 document.addEventListener('pointerdown', ev => {
   const el = ev.target.closest('#pages [data-id], #cal [data-id]');
-  if (!el || !el.dataset.id) return;
+  if (!el) return;
   pressEl = el; pressXY = [ev.clientX, ev.clientY]; el.classList.add('pressing');
-  pressT = setTimeout(() => { const id = el.dataset.id; pressEnd(); openEdit(id); }, 500);
+  pressT = setTimeout(() => {
+    const id = el.dataset.id; pressEnd();
+    // 古いApps Scriptは予定のIDを返さないので直せない。黙って何もしないと分からないので伝える
+    if (!id) toast('この予定を直すには、Apps Scriptを新しいバージョンでデプロイし直してください');
+    else openEdit(id);
+  }, 500);
 });
 document.addEventListener('pointermove', ev => {
   if (pressEl && Math.hypot(ev.clientX - pressXY[0], ev.clientY - pressXY[1]) > 10) pressEnd();
@@ -826,6 +885,12 @@ document.addEventListener('pointermove', ev => {
 pages.addEventListener('scroll', pressEnd, { passive: true });
 document.getElementById('cal').addEventListener('scroll', pressEnd, { passive: true });
 document.addEventListener('contextmenu', ev => { if (ev.target.closest('[data-id]')) ev.preventDefault(); });
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  clearTimeout(toast.t); toast.t = setTimeout(() => { t.style.display = 'none'; }, 4000);
+}
 
 function openEdit(id) {
   const e = EVENTS.find(x => x.id === id);
