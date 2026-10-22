@@ -77,7 +77,9 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 #dots span.on { background: var(--sub); width: 20px; }
 #banner { display: none; font-size: 12px; color: var(--warn); margin-bottom: 10px; }
 #gear { background: none; border: 0; color: var(--muted); font-size: 18px; }
-#setup { display: none; position: fixed; inset: 0; background: var(--bg); padding: calc(env(safe-area-inset-top) + 24px) 20px; z-index: 5; }
+#setup { display: none; position: fixed; inset: 0; background: var(--bg); padding: calc(env(safe-area-inset-top) + 24px) 20px calc(env(safe-area-inset-bottom) + 24px); z-index: 5; overflow-y: auto; }
+#setup .row2 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; } #setup .row2 input { margin-top: 4px; min-width: 0; padding: 10px 8px; }
+#setup .row2.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 #setup input { width: 100%; font-size: 16px; padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--text); margin: 6px 0 14px; }
 #setup button { font-size: 16px; padding: 12px 18px; border-radius: 12px; border: 0; background: var(--text); color: var(--bg); margin-right: 8px; }
 #plus { position: fixed; right: 18px; bottom: calc(env(safe-area-inset-bottom) + 34px); width: 56px; height: 56px; border-radius: 99px; border: 0;
@@ -219,6 +221,18 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
   <label class="label">合言葉</label>
   <input id="inKey" type="text" autocomplete="off">
   <button id="save">保存</button><button id="cancel" style="background:var(--line);color:var(--text)">閉じる</button>
+  <div class="mid" style="margin-top:28px">声かけ（通知）</div>
+  <p class="note" id="pushNote" style="margin-bottom:12px"></p>
+  <div class="row2">
+    <label class="label">朝<input id="pMorning" type="time"></label>
+    <label class="label">昼<input id="pNoon" type="time"></label>
+    <label class="label">夕<input id="pEvening" type="time"></label>
+  </div>
+  <div class="row2 two">
+    <label class="label">予定の何分前<input id="pLead" type="number" min="0" max="60" inputmode="numeric"></label>
+    <label class="label">家族の予定は<input id="pLeadF" type="number" min="0" max="60" inputmode="numeric"></label>
+  </div>
+  <button id="pushOn">通知をオンにする</button><button id="pushTest" style="background:var(--line);color:var(--text)">ためしに送る</button>
 </div>
 
 <script>
@@ -650,7 +664,7 @@ const setup = document.getElementById('setup');
 document.getElementById('gear').onclick = () => {
   document.getElementById('inUrl').value = store.get('levi_url') || '';
   document.getElementById('inKey').value = store.get('levi_key') || '';
-  setup.style.display = 'block';
+  setup.style.display = 'block'; pushInfo();
 };
 document.getElementById('cancel').onclick = () => { setup.style.display = 'none'; };
 document.getElementById('save').onclick = () => {
@@ -658,6 +672,59 @@ document.getElementById('save').onclick = () => {
   store.set('levi_key', document.getElementById('inKey').value.trim());
   setup.style.display = 'none'; load();
 };
+
+// ---------- 声かけ（通知） ----------
+// Apps Scriptが5分ごとに見回り、朝・昼・夕と予定の直前に合図を送る。sw.js が受け箱から文面を取って出す
+const PUSH_KEYS = { pMorning: 'morning', pNoon: 'noon', pEvening: 'evening', pLead: 'lead', pLeadF: 'leadFamily' };
+const standalone = () => navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+const pushNote = t => { document.getElementById('pushNote').innerHTML = t; };
+const b64u = s => { const b = atob(s.replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+async function swReady() {
+  const reg = await navigator.serviceWorker.register('sw.js');
+  // 通知係が Apps Script を呼べるよう、URLと合言葉を渡しておく（この端末の中だけ）
+  const c = await caches.open('levi-cfg');
+  await c.put('cfg', new Response(JSON.stringify({ u: store.get('levi_url'), k: store.get('levi_key') })));
+  return navigator.serviceWorker.ready.then(() => reg);
+}
+async function pushInfo() {
+  const url = store.get('levi_url'), key = store.get('levi_key');
+  if (!url || !key) return pushNote('先に上のURLと合言葉を入れてください');
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return pushNote(standalone() ? 'この端末では通知が使えません（iOS 16.4以降が必要）' : '通知は<b>ホーム画面に置いたリヴァイ</b>から使えます。Safariの共有 →「ホーム画面に追加」で開き直してください');
+  }
+  try {
+    const d = await (await fetch(`${url}?k=${encodeURIComponent(key)}&a=vapid&t=${Date.now()}`)).json();
+    if (d.error === 'unknown' || d.events) throw new Error('old');
+    if (!d.pub) return pushNote('Apps Scriptで <b>setupPush</b> を1回実行してください（READMEの「声かけ」）');
+    Object.entries(PUSH_KEYS).forEach(([id, k]) => { document.getElementById(id).value = d.cfg[k]; });
+    const reg = PUSH_REG = await swReady(); PUSH_PUB = d.pub;
+    const sub = reg && await reg.pushManager.getSubscription();
+    pushNote(sub && Notification.permission === 'granted' ? `この端末に届きます ✓（登録 ${d.devices}台）。時刻を変えたら「通知をオンにする」をもう一度` : 'まだこの端末には届きません。下の「通知をオンにする」を押してください');
+    return d;
+  } catch (e) { pushNote('Apps Scriptを新しいコードに貼り替えて、新バージョンでデプロイしてください'); }
+}
+const pushCfgIn = () => Object.fromEntries(Object.entries(PUSH_KEYS).map(([id, k]) => [k, document.getElementById(id).value]));
+let PUSH_REG = null, PUSH_PUB = '';
+document.getElementById('pushOn').onclick = async () => {
+  if (!PUSH_REG || !PUSH_PUB) return pushInfo();
+  try {
+    // 許可を求めるのは、ボタンを押したその場でないといけない（iPhoneの決まり）。鍵と通知係は⚙︎を開いたときに用意済み
+    const sub = await PUSH_REG.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(PUSH_PUB) });
+    const r = await post({ action: 'push', sub: sub.toJSON(), name: /iPad/.test(navigator.userAgent) ? 'iPad' : 'iPhone', cfg: pushCfgIn() });
+    pushNote(`この端末に届きます ✓（登録 ${r.devices}台）`); toast('通知をオンにしました');
+  } catch (e) {
+    pushNote(window.Notification && Notification.permission === 'denied' ? '通知が許可されていません。設定 → 通知 → リヴァイ で許可してください' : 'うまくいきませんでした：' + esc(e.message));
+  }
+};
+document.getElementById('pushTest').onclick = async () => {
+  try { await swReady(); await post({ action: 'push', test: true }); toast('送りました。数秒で届きます'); }
+  catch (e) { pushNote('送れませんでした：' + esc(e.message)); }
+};
+// 通知を押して開いたら A「いま」へ
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', ev => { if (ev.data === 'goA') { setup.style.display = 'none'; go(0); load(); } });
+  navigator.serviceWorker.getRegistration().then(r => { if (r) swReady(); }).catch(() => {});
+}
 
 // ---------- 予定を入れる（＋） ----------
 const sheet = document.getElementById('add');
