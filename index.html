@@ -398,8 +398,17 @@ const WD = '日月火水木金土';
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const addDays = (d, n) => { const x = startOfDay(d); x.setDate(x.getDate() + n); return x; };
 
+// 漢数字（〜九十九）を数字に
+function kanNum(k) {
+  const d = '〇一二三四五六七八九';
+  if (!k.includes('十')) return String(+[...k].map(c => d.indexOf(c)).join(''));
+  const [a, b] = k.split('十');
+  return String((a ? d.indexOf(a) : 1) * 10 + (b ? d.indexOf(b) : 0));
+}
 function parseLine(text, now) {
-  let s = text.normalize('NFKC').replace(/[〜～]/g, '~').trim();
+  // 音声入力の話し言葉：漢数字（六時・十時半・二十七日）を数字に、「正午」を12時に
+  let s = text.normalize('NFKC').replace(/[〜～]/g, '~').replace(/[、。,]/g, ' ').trim()
+    .replace(/[〇一二三四五六七八九十]+(?=時|分|日(?!中|間)|月)/g, kanNum).replace(/正午/g, '昼12時');
   const out = { raw: text.trim(), cat: null, date: null, start: null, end: null, deadline: false, mins: 30, title: '', ampm: false };
   const cut = re => { const m = s.match(re); if (m) s = s.replace(m[0], ' '); return m; };
 
@@ -434,19 +443,24 @@ function parseLine(text, now) {
   if ((m = cut(/(\d+)\s*(?:(分)|時間)(?:くらい|ほど|ぐらい)/) || cut(/(\d+)\s*時間/))) out.mins = +m[1] * (m[2] ? 1 : 60);
 
   // 時刻（「〜17時」があれば終わり）
-  const T = /(午前|午後|朝|夕方|夜)?\s*(\d{1,2})(?::(\d{2})|時(?:(半)|(\d{1,2})分)?)/;
+  // 「朝の6時」「夕方の5時」のように、間に「の」が入っても朝・夕方として読む
+  const T = /(午前|午後|朝|夕方|夕|夜|晩|お昼|昼)?\s*の?\s*(\d{1,2})(?::(\d{2})|時(?:(半)|(\d{1,2})分)?)/;
   const toMin = t => {
     let h = +t[2]; const mm = t[3] ? +t[3] : t[4] ? 30 : t[5] ? +t[5] : 0;
-    if (/午後|夕方|夜/.test(t[1] || '') && h < 12) h += 12;
+    if (/午後|夕|夜|晩/.test(t[1] || '') && h < 12) h += 12;
+    else if (/昼/.test(t[1] || '') && h <= 6) h += 12; // 昼1時は13時
     else if (!t[1] && h >= 1 && h <= 4) h += 12; // 「3時」は15時とみる
     else if (!t[1] && h >= 5 && h <= 7) out.ampm = true; // 「6時」は朝か夕方か聞く
     return h * 60 + mm;
   };
-  const t1 = cut(T);
+  const t1 = s.match(T);
   if (t1) {
     out.start = toMin(t1);
-    const t2 = s.match(new RegExp('^\\s*(?:~|-|から|ー)\\s*' + T.source));
-    if (t2) { s = s.replace(t2[0], ' '); out.end = toMin(t2); }
+    // 終わりは始まりのすぐ後ろだけを見る（「9時から10時半まで」）
+    let rest = s.slice(t1.index + t1[0].length);
+    const t2 = rest.match(new RegExp('^\\s*(?:~|-|から|ー)\\s*' + T.source));
+    if (t2) { rest = rest.slice(t2[0].length); out.end = toMin(t2); }
+    s = s.slice(0, t1.index) + ' ' + rest;
   }
   if (out.start == null && (m = cut(/(?:~|から)\s*(\d{1,2})時/))) out.end = +m[1] * 60;
 
@@ -454,7 +468,8 @@ function parseLine(text, now) {
   if (DL_WORDS.test(s) || (out.date && out.start == null && /まで/.test(s))) out.deadline = true;
   cut(/までに|まで/);
 
-  out.title = s.replace(/\s+/g, ' ').trim().replace(/(^|\s)[のにでへ](?=\s|$)/g, ' ').trim().replace(/^(?:[\s、,.。:：にの]|から|より)+|[\s、,.。]+$/g, '');
+  out.title = s.replace(/\s+/g, ' ').trim().replace(/(^|\s)(?:[のにでへはを]|から)(?=\s|$)/g, ' ').trim()
+    .replace(/^(?:[\s、,.。:：にのはを]|から|より)+|[\s、,.。]+$/g, '').replace(/(?:です|でした|します|しよう|ます)$/, '').trim();
   if (!out.cat) {
     const hits = Object.keys(CAT_WORDS).filter(c => CAT_WORDS[c].test(out.title));
     // 組合の言葉は他と紛れにくいので先に決める。家族と仕事が両方出たら聞く
@@ -725,7 +740,7 @@ function setP(i, k, v) {
   if (k === 'date') p.date = addDays(new Date(), v);
   else if (k === 'dateStr') p.date = v ? new Date(v + 'T00:00') : null;
   else if (k === 'start' || k === 'end') { p[k] = toMin(v); p.ampm = false; }
-  else if (k === 'pick') { p.start = v; p.ampm = false; }
+  else if (k === 'pick') { if (p.end != null && v >= 720 && p.end < 720) p.end += 720; p.start = v; p.ampm = false; } // 夕方を選んだら終わりも夕方に
   else if (k === 'deadline') { p.deadline = v; if (v && !DEADLINE_RE.test(p.title)) p.title += ' 締切'; if (!v) p.title = baseTitle(p.title); }
   else p[k] = v;
   renderDrafts();
