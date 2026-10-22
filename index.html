@@ -49,6 +49,10 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 .t-family { color: var(--family); } .t-work { color: var(--work); } .t-union { color: var(--union); }
 .link { font-size: 14px; color: var(--sub); text-align: right; padding: 6px 4px; }
 .allday { font-size: 13px; color: var(--sub); margin-bottom: 10px; }
+.wx { font-size: 13px; color: var(--sub); margin-bottom: 10px; }
+.wxline { font-size: 15px; line-height: 1.6; }
+.wxline + .wxline { margin-top: 4px; }
+.rain { color: var(--work); font-weight: 600; }
 .river { position: relative; margin-left: 52px; border-left: 2px solid var(--line); padding-left: 14px; }
 .ev, .gap, .nowline { position: relative; margin: 8px 0; }
 .ev .time, .gap .time { position: absolute; left: -68px; width: 48px; text-align: right; font-size: 13px; color: var(--sub); font-variant-numeric: tabular-nums; top: 12px; }
@@ -242,15 +246,23 @@ function renderA(evs, now) {
 
   // 今やること
   let doNow, doNote;
+  const todayDo = today.filter(e => isDo(e) && e.start > now).sort((a, b) => a.start - b.start)[0];
   if (current) {
-    doNow = current.title; doNote = `${hm(current.end)}まで（あと${dur((current.end - now) / 6e4)}）`;
+    doNow = doName(current); doNote = `${hm(current.end)}まで（あと${dur((current.end - now) / 6e4)}）`;
+    if (stageOf(current)) doNote = `とりあえずここまで：${esc(stageOf(current))}<br>${doNote}`;
   } else if (now.getHours() >= 21 || now.getHours() < 5) {
     // 夜は進めさせない。明日の最初の約束だけ伝える
     doNow = '今日はおしまい';
     doNote = next && !sameDay(next.start, now) ? `明日は${hm(next.start)}「${esc(next.title)}」から` : 'ゆっくり休む';
+  } else if (next && isDo(next) && (next.start - now) / 6e4 <= 180) {
+    doNow = `${hm(next.start)}から「${doName(next)}」`;
+    doNote = `${dur((next.end - next.start) / 6e4)}。とりあえずここまで：${esc(stageOf(next) || '手をつける')}`;
   } else if (next && (next.start - now) / 6e4 <= 180) {
     doNow = `「${next.title}」の準備`;
     doNote = next.location ? `場所：${esc(next.location)}` : 'とりあえず、持ち物と移動を確かめる';
+  } else if (todayDo) {
+    doNow = `${hm(todayDo.start)}から「${doName(todayDo)}」`;
+    doNote = `とりあえずここまで：${esc(stageOf(todayDo) || '手をつける')}`;
   } else if (deadlines[0]) {
     doNow = `「${deadlines[0].title}」を少し進める`;
     doNote = 'とりあえず15分だけ';
@@ -270,6 +282,9 @@ function renderA(evs, now) {
       <div class="note">${hm(wrap)}までに切り上げ</div></div>`;
   }
 
+  const wn = weatherNotes(evs, now);
+  if (wn.length) html += `<div class="card"><div class="label">天気</div>${wn.map(t => `<div class="wxline">${esc(t)}</div>`).join('')}</div>`;
+
   const rest = today.filter(e => e.start > now).length;
   html += `<div class="link" onclick="go(1)">今日の残り ${rest}件 ▸</div>`;
   document.getElementById('A').innerHTML = html;
@@ -282,6 +297,8 @@ function renderB(evs, now) {
   const allDay = today.filter(e => e.allDay);
   const timed = today.filter(e => !e.allDay).sort((a, b) => a.start - b.start);
   let html = '';
+  const wd = wxDay(now);
+  if (wd) html += `<div class="wx">${wd.icon} ${wd.name}　${wd.max}°/${wd.min}°　雨${wd.pop}%</div>`;
   if (allDay.length) html += `<div class="allday">終日：${allDay.map(e => badge(e.cat) + esc(e.title)).join('　')}</div>`;
 
   const dayStart = new Date(d0); dayStart.setHours(DAY_START);
@@ -308,7 +325,7 @@ function renderB(evs, now) {
     if (it.type === 'ev') {
       const e = it.e, past = e.end <= now ? ' past' : '';
       html += `<div class="ev ${e.cat}${past}" data-id="${esc(e.id)}"><span class="time">${hm(e.start)}</span><div class="box">
-        <div class="ttl">${esc(e.title)}</div><div class="sub">${hm(e.start)}–${hm(e.end)}${e.location ? '　' + esc(e.location) : ''}</div></div></div>`;
+        <div class="ttl">${esc(e.title)}</div><div class="sub">${hm(e.start)}–${hm(e.end)}${e.location ? '　' + esc(e.location) : ''}${rainMark(e)}</div></div></div>`;
     } else {
       html += `<div class="gap"><span class="time">${hm(it.from)}</span><div class="box">すき間 <b>${dur(it.min)}</b>（${hm(it.from)}–${hm(it.to)}）</div></div>`;
     }
@@ -428,31 +445,92 @@ function missing(p) {
   return need;
 }
 
-// 締切の前に「やる日」を2つまで置く（空いている時間に、作業時間ぶん）
-function doDays(p, evs, now) {
-  if (!p.deadline || !p.date) return [];
-  const last = addDays(p.date, -1), days = [];
-  for (let d = startOfDay(now); d <= last; d = addDays(d, 1)) days.push(d);
-  if (!days.length) return [];
-  const picks = days.length === 1 ? [days[0]] : [days[Math.floor((days.length - 1) / 2)], days[days.length - 1]];
-  const out = [];
-  for (const d of [...new Set(picks)]) {
-    const weekend = d.getDay() === 0 || d.getDay() === 6;
-    let from = new Date(d); from.setHours(weekend ? 9 : 16, weekend ? 0 : 30, 0, 0);
-    const until = new Date(d); until.setHours(21, 0, 0, 0);
-    if (from < now) { from = new Date(now); from.setMinutes(Math.ceil(from.getMinutes() / 15) * 15, 0, 0); }
-    const busy = evs.filter(e => !e.allDay && e.end > from && e.start < until).sort((a, b) => a.start - b.start);
-    for (const e of busy) { if ((e.start - from) / 6e4 >= p.mins) break; if (e.end > from) from = new Date(e.end); }
-    if ((until - from) / 6e4 >= p.mins) out.push({ start: from, end: new Date(from.getTime() + p.mins * 6e4) });
-  }
-  return out;
+// 締切のための作業（▶ の予定、または説明に「締切M/D」と書いた作業）
+function plansOf(dl) {
+  const md0 = `${dl.start.getMonth() + 1}/${dl.start.getDate()}`, want = '▶ ' + baseTitle(dl.title), lim = addDays(dl.start, 1);
+  return EVENTS.filter(v => v !== dl && !v.allDay && v.start < lim &&
+    (v.title.startsWith(want) || v.desc.includes('締切' + md0) || v.desc.includes(md0 + '締切'))).sort((a, b) => a.start - b.start);
+}
+// 「とりあえずここまで」（作業の説明から）
+const stageOf = e => { const m = (e.desc || '').match(/ここまで[」』]?[:：]\s*([^\n。]+?)(?:（\d+\/\d+）)?(?:\n|。|$)/); return m ? m[1] : ''; };
+const isDo = e => e.title.startsWith('▶') || !!stageOf(e) || /締切\d+\/\d+の逆算|\d+\/\d+締切/.test(e.desc);
+const doName = e => e.title.replace(/^▶\s*/, '');
+// 締切の次の「やる日」と、今日なら「今日はここまで」
+function nextDo(e, now) {
+  const all = plansOf(e), x = all.find(v => v.end > now);
+  if (!x) return all.length ? 'やる日は終わり。あとは出すだけ' : 'やる日はまだ';
+  const st = stageOf(x), n = all.indexOf(x) + 1;
+  if (sameDay(x.start, now)) return `<b>今日 ${hm(x.start)}〜</b>${st ? '　ここまで：' + esc(st) : ''}`;
+  return `次のやる日：${md(x.start)} ${hm(x.start)}${all.length > 1 ? `（${n}/${all.length}）` : ''}${st ? '　' + esc(st) : ''}`;
 }
 
-// 締切の次の「やる日」（＋から入れた ▶ の予定）
-function nextDo(e, now) {
-  const want = '▶ ' + baseTitle(e.title);
-  const x = EVENTS.filter(v => v.title === want && v.end > now).sort((a, b) => a.start - b.start)[0];
-  return x ? `次のやる日：${sameDay(x.start, now) ? '今日' : md(x.start)} ${hm(x.start)}` : 'やる日はまだ';
+// ---------- 天気（大分市。予定に結びつけて一言） ----------
+// 朝の声かけ（ステップ4）でも weatherNotes() をそのまま使う
+const WX_URL = 'https://api.open-meteo.com/v1/forecast?latitude=33.2396&longitude=131.6093'
+  + '&hourly=precipitation_probability,precipitation,weather_code,temperature_2m'
+  + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=Asia%2FTokyo&forecast_days=3';
+const OUT_RE = /迎え|送り|運動会|遠足|えんそく|サッカー|スイミング|試合|校外|見学|プール|公園|散歩|外出|出張|会館|センター|いもほり|ハロウィン|子ども会|買い物|病院|帰省|旅行|訪問/;
+const RAIN_POP = 50;            // 降水確率がこれ以上なら知らせる（%）
+let WX = null;
+async function loadWx() {
+  try { const c = JSON.parse(store.get('levi_wx') || 'null'); if (c) { WX = c.data; if (Date.now() - c.at < 30 * 6e4) return; } } catch (e) {}
+  try {
+    const data = await (await fetch(WX_URL)).json();
+    if (data.hourly && data.daily) { WX = data; store.set('levi_wx', JSON.stringify({ at: Date.now(), data })); }
+  } catch (e) {} // 天気が取れなくても予定は出す
+}
+function wxName(code) {
+  if (code >= 95) return ['⛈', '雷雨']; if (code >= 85) return ['❄', '雪']; if (code >= 80) return ['☔', 'にわか雨'];
+  if (code >= 71) return ['❄', '雪']; if (code >= 61) return ['☔', '雨']; if (code >= 51) return ['🌦', '小雨'];
+  if (code >= 45) return ['🌫', '霧']; if (code === 3) return ['☁', 'くもり']; if (code >= 1) return ['🌤', '晴れ時々くもり']; return ['☀', '晴れ'];
+}
+function wxDay(d) {
+  if (!WX) return null;
+  const i = WX.daily.time.indexOf(ymd(d)); if (i < 0) return null;
+  const [icon, name] = wxName(WX.daily.weather_code[i]);
+  return { icon, name, max: Math.round(WX.daily.temperature_2m_max[i]), min: Math.round(WX.daily.temperature_2m_min[i]), pop: WX.daily.precipitation_probability_max[i] ?? 0 };
+}
+// from〜to（時）の間でいちばん降りそうな値
+function wxRain(from, to) {
+  if (!WX) return null;
+  let pop = -1, mm = 0;
+  for (let t = new Date(from); t < to; t = new Date(t.getTime() + 36e5)) {
+    const i = WX.hourly.time.indexOf(`${ymd(t)}T${pad(t.getHours())}:00`); if (i < 0) continue;
+    pop = Math.max(pop, WX.hourly.precipitation_probability[i] ?? 0); mm = Math.max(mm, WX.hourly.precipitation[i] ?? 0);
+  }
+  return pop < 0 ? null : { pop, mm, wet: pop >= RAIN_POP || mm >= 1 };
+}
+const outside = e => e.cat === 'family' || OUT_RE.test(e.title) || !!e.location;
+function rainOf(e) {
+  if (e.allDay) { const a = new Date(e.start); a.setHours(8); const b = new Date(e.start); b.setHours(16); return wxRain(a, b); }
+  const a = new Date(e.start); a.setMinutes(0, 0, 0);
+  return wxRain(a, new Date(Math.min(e.end, e.start.getTime() + 3 * 36e5)));
+}
+function rainMark(e) {
+  if (!outside(e)) return '';
+  const r = rainOf(e); return r && r.wet ? `　<span class="rain">☔${r.pop}%</span>` : '';
+}
+// 予定にかかわる天気だけを一言ずつ（最大3つ）。夕方からは明日の分も見る
+function weatherNotes(evs, now) {
+  if (!WX) return [];
+  const days = [startOfDay(now)]; if (now.getHours() >= 15) days.push(addDays(now, 1));
+  const out = [];
+  for (const d of days) {
+    const lab = sameDay(d, now) ? '' : '明日 ';
+    const list = evs.filter(e => sameDay(e.start, d) && outside(e) && (e.allDay || e.end > now)).sort((a, b) => (b.allDay - a.allDay) || (a.start - b.start));
+    for (const e of list) {
+      const r = rainOf(e); if (!r || !r.wet) continue;
+      if (e.allDay) out.push(`${lab}「${e.title}」 雨${r.pop}%${/運動会|遠足|えんそく|いもほり|試合/.test(e.title) ? '。中止・延期の連絡に気をつけて' : ''}`);
+      else out.push(`${lab}${hm(e.start)}「${e.title}」のころ 雨${r.pop}%。${/迎え|送り|サッカー|スイミング/.test(e.title) || e.cat === 'family' ? '傘を車に' : '傘を持って'}`);
+    }
+    // 朝の冷え込みと寒暖差（今日は朝のうちだけ、明日は夕方から）
+    const w = wxDay(d);
+    if (w && (lab || now.getHours() < 10)) {
+      if (w.min <= 10) out.push(`${lab || '今朝は'}${lab ? '朝は' : ''}${w.min}°。上着を`);
+      else if (w.max - w.min >= 10) out.push(`${lab}寒暖差${w.max - w.min}°（${w.min}°→${w.max}°）。脱ぎ着しやすく`);
+    }
+  }
+  return out.slice(0, 3);
 }
 
 // ---------- データ ----------
@@ -464,6 +542,7 @@ function render() {
   if (calOpen) renderCal();
 }
 async function load() {
+  loadWx().then(render);
   const url = store.get('levi_url'), key = store.get('levi_key');
   const banner = document.getElementById('banner');
   if (!url || !key) {
@@ -497,11 +576,14 @@ function demoEvents() {
   const d = startOfDay(new Date());
   const at = (day, h, m) => { const x = new Date(d); x.setDate(x.getDate() + day); x.setHours(h, m || 0); return x.toISOString(); };
   const allDay = day => ({ start: at(day, 0), end: at(day + 1, 0), allDay: true });
+  const mdOf = day => { const x = addDays(d, day); return `${x.getMonth() + 1}/${x.getDate()}`; };
   return [
     { title: '【仕事】職員朝会', start: at(0, 8, 10), end: at(0, 8, 25) },
     { title: '【仕事】5年 社会（研究授業）', start: at(0, 10, 45), end: at(0, 11, 30), location: '5年1組' },
     { title: '【仕事】職員会議', start: at(0, 15, 30), end: at(0, 16, 30), location: '会議室' },
+    { title: '【仕事】▶ 研修資料', start: at(0, 16, 40), end: at(0, 17, 10), desc: `ここまで：仕上げて出せる形に（2/2）\n締切${mdOf(2)}の逆算（30分）\n（リヴァイが登録）` },
     { title: '【家族】お迎え', start: at(0, 18, 0), end: at(0, 18, 30), location: '保育園' },
+    { title: '【仕事】▶ 学年だより', start: at(3, 15, 30), end: at(3, 16, 0), desc: `ここまで：とりかかって半分まで（1/2）\n締切${mdOf(6)}の逆算（30分）\n（リヴァイが登録）` },
     { title: '【組合】分会会議', start: at(1, 16, 45), end: at(1, 17, 30) },
     { title: '【家族】夕食（実家）', start: at(2, 18, 30), end: at(2, 20, 0) },
     { title: '【仕事】研修資料 提出締切', ...allDay(2) },
@@ -539,7 +621,7 @@ let DRAFTS = [];
 const md = d => `${d.getMonth() + 1}/${d.getDate()}(${WD[d.getDay()]})`;
 const atMin = (d, min) => { const x = startOfDay(d); x.setMinutes(min); return x; };
 const minStr = min => `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;
-const baseTitle = t => t.replace(/\s*(締切|締め切り|〆切|しめきり|期限)$/, '');
+const baseTitle = t => t.replace(/^(締切|〆切|期限)[:：]\s*|^〆\s*/, '').replace(/\s*(締切|締め切り|〆切|しめきり|期限)$/, '').trim();
 
 const showInput = on => {
   ['inText', 'read', 'addHint'].forEach(x => { document.getElementById(x).style.display = on ? '' : 'none'; });
@@ -556,7 +638,7 @@ document.getElementById('read').onclick = () => {
   if (!lines.length) return;
   const fresh = lines.map(l => {
     const p = parseLine(l, now);
-    return { p, status: 'edit', ids: [], dd: doDays(p, EVENTS, now), ddOn: [], msg: '' };
+    return { p, status: 'edit', ids: [], msg: '' };
   });
   DRAFTS = fresh.concat(DRAFTS.filter(d => d.status === 'done'));
   inText.value = '';
@@ -570,10 +652,10 @@ function renderDrafts() {
     const ask = k => need.includes(k) ? ' ask' : '';
     if (d.status === 'done') {
       const when = p.deadline ? `${md(p.date)} 締切` : p.allDay ? `${md(p.date)} 終日` : `${md(p.date)} ${minStr(p.start)}`;
-      const dd = d.dd.length && !d.ddIds ? `<div class="label" style="margin-top:12px">やる日の候補（押すと選ぶ）</div>
-        <div class="chips">${d.dd.map((x, j) => `<button class="chip${d.ddOn.includes(j) ? ' on' : ''}" onclick="toggleDD(${i},${j})">${md(x.start)} ${hm(x.start)}–${hm(x.end)}</button>`).join('')}</div>
-        <button class="btn" onclick="saveDD(${i})" ${d.ddOn.length ? '' : 'disabled'}>やる日も入れる</button>` :
-        d.ddIds ? `<div class="note">やる日 ${d.ddIds.length}つ入れました</div>` : '';
+      const dl = p.deadline && EVENTS.find(e => e.id === d.ids[0]), pl = dl ? plansOf(dl) : [];
+      const dd = !p.deadline ? '' : pl.length ? `<div class="label" style="margin-top:12px">逆算してやる日を置きました</div>
+        <div class="note">${pl.map(x => `${md(x.start)} ${hm(x.start)}–${hm(x.end)}${stageOf(x) ? '　' + esc(stageOf(x)) : ''}`).join('<br>')}</div>` :
+        `<div class="note" style="margin-top:8px">${d.planning ? 'やる日を逆算しています…' : '3週間以内になったら、リヴァイがやる日を置きます'}</div>`;
       return `<div class="card draft"><div class="label">入れました ✓${d.msg ? '　' + esc(d.msg) : ''}</div>
         <div class="mid">${badge(p.cat)}${esc(p.title)}</div><div class="note">${when}</div>${dd}
         <div class="link"><span onclick="undo(${i})">取り消す</span></div></div>`;
@@ -608,7 +690,6 @@ function setP(i, k, v) {
   else if (k === 'pick') { p.start = v; p.ampm = false; }
   else if (k === 'deadline') { p.deadline = v; if (v && !DEADLINE_RE.test(p.title)) p.title += ' 締切'; if (!v) p.title = baseTitle(p.title); }
   else p[k] = v;
-  d.dd = doDays(p, EVENTS, new Date());
   renderDrafts();
 }
 
@@ -641,27 +722,17 @@ async function save(d) {
     const r = await post({ action: 'add', items });
     d.ids = r.ids; d.status = 'done'; d.msg = r.demo ? 'サンプル表示中なのでカレンダーには入りません' : '';
     addLocal(items, r.ids);
+    // 締切なら、取り直したときにApps Scriptがやる日を置く
+    if (d.p.deadline && !r.demo) { d.planning = true; renderDrafts(); await load(); d.planning = false; }
   } catch (e) {
     d.status = 'error'; d.msg = errMsg(e);
   }
   renderDrafts();
 }
-function toggleDD(i, j) {
-  const on = DRAFTS[i].ddOn, k = on.indexOf(j);
-  k < 0 ? on.push(j) : on.splice(k, 1);
-  renderDrafts();
-}
-async function saveDD(i) {
-  const d = DRAFTS[i];
-  const items = d.ddOn.map(j => d.dd[j]).map(x => ({ title: '▶ ' + baseTitle(d.p.title), cat: d.p.cat, allDay: false, start: x.start.toISOString(), end: x.end.toISOString() }));
-  try {
-    const r = await post({ action: 'add', items });
-    d.ddIds = r.ids; addLocal(items, r.ids);
-  } catch (e) { d.msg = e.message; }
-  renderDrafts();
-}
 async function undo(i) {
-  const d = DRAFTS[i], ids = d.ids.concat(d.ddIds || []);
+  const d = DRAFTS[i], dl = EVENTS.find(e => e.id === d.ids[0]);
+  // 締切を取り消すなら、リヴァイが置いたやる日も一緒に（手で置いた作業は消さない）
+  const ids = d.ids.concat(dl && d.p.deadline ? plansOf(dl).filter(x => x.desc.includes('（リヴァイが登録）')).map(x => x.id) : []);
   try {
     await post({ action: 'delete', ids });
     EVENTS = EVENTS.filter(e => !ids.includes(e.id));
@@ -762,7 +833,7 @@ function openEdit(id) {
   const mins = d => d.getHours() * 60 + d.getMinutes();
   const p = { title: e.title, cat: e.cat === 'other' ? null : e.cat, date: startOfDay(e.start), allDay: e.allDay,
     deadline: e.deadline && e.allDay, start: e.allDay ? null : mins(e.start), end: e.allDay ? null : mins(e.end), mins: 30 };
-  DRAFTS = [{ p, mode: 'edit', id, status: 'edit', ids: [], dd: [], ddOn: [], msg: '' }];
+  DRAFTS = [{ p, mode: 'edit', id, status: 'edit', ids: [], msg: '' }];
   renderDrafts();
   showInput(false); sheet.style.display = 'block';
 }
