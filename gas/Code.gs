@@ -177,7 +177,7 @@ function planDeadlines_(evs, holidays, now) {
   const today = sod_(now), out = { create: [], mark: [] };
   evs.forEach(function (dl) {
     const t = stripCat_(dl.title), desc = dl.desc || '';
-    if (t.indexOf('▶') === 0 || !STRONG_DL.test(t)) return;
+    if (t.indexOf('▶') === 0 || t.indexOf('✓') === 0 || !STRONG_DL.test(t)) return; // ✓＝アプリで斬った（済み）
     if (desc.indexOf(PLANNED_MARK) !== -1 || desc.indexOf(NO_PLAN) !== -1) return;
     const D = sod_(new Date(dl.start)), days = Math.round((D - today) / 864e5);
     if (days < 1 || days > PLAN_DAYS) return;
@@ -385,7 +385,7 @@ function tick() {
 function dayEvents_(now) {
   return CalendarApp.getDefaultCalendar().getEvents(sod_(now), addD_(now, 2)).map(function (ev) {
     const o = toObj_(ev); o.cat = catOf_(o); o.name = shortTitle_(o.title); return o;
-  });
+  }).filter(function (o) { return stripCat_(o.title).indexOf('✓') !== 0; }); // 斬った（済んだ）予定には声をかけない
 }
 function shortTitle_(t) { return stripCat_(t).replace(/^▶\s*/, '').replace(/[（(][^）)]*[）)]$/, '').trim(); }
 
