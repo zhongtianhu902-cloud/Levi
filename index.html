@@ -995,43 +995,64 @@ const SLASH_LINES = ['よし。', '次だ。', '上出来だ。', '片付いた�
 const slainKey = () => 'levi_slain_' + ymd(new Date());
 const slainToday = () => +(store.get(slainKey()) || 0);
 const SLASH_SEL = '#pages [data-id], #cal .agenda [data-id], #cal .det [data-id]';
-let swEl = null, swX = 0, swY = 0, swDx = 0, swOn = false, swPage = 0;
-document.addEventListener('pointerdown', ev => {
-  if (ev.button > 0) return;
-  const el = ev.target.closest(SLASH_SEL);
+let swEl = null, swX = 0, swY = 0, swDx = 0, swOn = false, swPage = 0, swT = 0, swV = 0;
+// 指はtouchで扱う（pointerだと、少しでも縦に動いた瞬間にSafariがスクロールに取ってしまい斬れない）
+function swStart(target, x, y) {
+  const el = target.closest && target.closest(SLASH_SEL);
   if (!el || !el.dataset.id || el.classList.contains('donex')) return;
-  swEl = el; swX = ev.clientX; swY = ev.clientY; swDx = 0; swOn = false;
+  swEl = el; swX = x; swY = y; swDx = 0; swOn = false; swV = 0; swT = performance.now();
   swPage = Math.round(pages.scrollLeft / pages.clientWidth);
   wakeAudio();
-});
-document.addEventListener('pointermove', ev => {
-  if (!swEl) return;
-  const dx = ev.clientX - swX, dy = ev.clientY - swY;
+}
+// 戻り値 true＝横に斬っている最中（スクロールさせない）
+function swMove(x, y) {
+  if (!swEl) return false;
+  const dx = x - swX, dy = y - swY;
   if (!swOn) {
-    if (dx > 12 && dx > Math.abs(dy) * 1.5) { swOn = true; swEl.classList.add('slashing'); }
-    else return;
+    if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) { swEl = null; return false; } // 縦はふつうにスクロール
+    if (dx > 8 && dx > Math.abs(dy)) { swOn = true; swEl.classList.add('slashing'); pressEnd(); }
+    else return false;
   }
   swDx = Math.max(0, dx);
+  swV = swDx / Math.max(1, performance.now() - swT); // 払いの速さ（px/ms）
   swEl.style.transform = `translateX(${swDx}px)`;
-  swEl.classList.toggle('armed', swDx > slashAt(swEl));
-});
-document.addEventListener('pointerup', ev => swEnd(ev, false));
-document.addEventListener('pointercancel', ev => swEnd(ev, true));
-const slashAt = el => Math.min(110, el.offsetWidth * 0.3);
-function swEnd(ev, cancel) {
+  swEl.classList.toggle('armed', willSlash(swEl));
+  return true;
+}
+// 引き切る（幅の2割、最大80px）か、短くても素早く払えば斬る
+const willSlash = el => swDx > Math.min(80, el.offsetWidth * 0.2) || (swDx > 30 && swV > 0.4);
+function swEnd(x, y, cancel) {
   if (!swEl) return;
   const el = swEl; swEl = null;
   if (!swOn) {
     // 予定の上では左右のページ送りが効かないので、左へ払ったら次のページへ
-    const dx = ev.clientX - swX, dy = ev.clientY - swY;
+    const dx = x - swX, dy = y - swY;
     if (!cancel && el.closest('#pages') && dx < -50 && -dx > Math.abs(dy) * 1.5) go(Math.min(2, swPage + 1));
     return;
   }
   el.classList.remove('slashing', 'armed');
-  if (!cancel && swDx > slashAt(el) && slash(el)) return;
+  if (!cancel && willSlash(el) && slash(el)) return;
   el.animate([{ transform: `translateX(${swDx}px)` }, { transform: 'translateX(0)' }], { duration: 220, easing: 'cubic-bezier(.2,1.4,.5,1)' });
   el.style.transform = '';
 }
+let swTouch = null;
+document.addEventListener('touchstart', ev => {
+  if (ev.touches.length !== 1) { if (swEl) swEnd(swX, swY, true); return; }
+  const t = ev.touches[0]; swTouch = t.identifier; swStart(ev.target, t.clientX, t.clientY);
+}, { passive: true });
+document.addEventListener('touchmove', ev => {
+  const t = [...ev.changedTouches].find(x => x.identifier === swTouch);
+  if (t && swMove(t.clientX, t.clientY) && ev.cancelable) ev.preventDefault();
+}, { passive: false });
+document.addEventListener('touchend', ev => {
+  const t = [...ev.changedTouches].find(x => x.identifier === swTouch);
+  if (t) swEnd(t.clientX, t.clientY, false);
+});
+document.addEventListener('touchcancel', () => swEnd(swX, swY, true));
+// マウス（パソコンで確かめるとき）
+document.addEventListener('pointerdown', ev => { if (ev.pointerType === 'mouse' && ev.button === 0) swStart(ev.target, ev.clientX, ev.clientY); });
+document.addEventListener('pointermove', ev => { if (ev.pointerType === 'mouse') swMove(ev.clientX, ev.clientY); });
+document.addEventListener('pointerup', ev => { if (ev.pointerType === 'mouse') swEnd(ev.clientX, ev.clientY, false); });
 
 // 刃が走って、上下ふたつに割れて落ちる
 function slash(el) {
