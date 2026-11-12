@@ -25,6 +25,7 @@ function doGet(e) {
   const key = PropertiesService.getScriptProperties().getProperty('LEVI_KEY');
   const given = e && e.parameter ? e.parameter.k : '';
   if (!key || given !== key) return json_({ error: 'unauthorized' });
+  if (e.parameter.a === 'todo') return json_(todoList_()); // 待受（Scriptable）用：ToDoだけ軽く
   if (e.parameter.a) return json_(pushGet_(e.parameter.a)); // 通知の鍵・受け箱
 
   const now = new Date();
