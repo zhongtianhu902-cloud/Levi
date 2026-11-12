@@ -745,14 +745,17 @@ function todoLine_() {
   } catch (e) { return ''; }
 }
 
-/** 金曜の夜：今週斬った数と、斬ったものの一覧（本人の希望：数＋一覧） */
+/** 金曜の夜：今週斬った数と一覧、来週に持ち越す★の数と一番上（本人の希望：C） */
 const WEEK_AT = '20:30';
 function weekNudge_(now) {
   try {
-    const mon = weekStart_(now);
-    const done = todoRows_(todoSheet_()).filter(function (r) { return r.done && r.done >= mon && r.kind === 'todo'; })
+    const mon = weekStart_(now), rows = todoRows_(todoSheet_());
+    const done = rows.filter(function (r) { return r.done && r.done >= mon && r.kind === 'todo'; })
       .sort(function (a, b) { return a.done < b.done ? -1 : 1; });
-    if (!done.length) return { key: 'week', title: '今週斬ったのは 0', body: '来週は☆を1つだけ選ぶところから' };
-    return { key: 'week', title: '今週 ' + done.length + ' 斬った', body: done.map(function (r) { return '・' + r.title; }).join('\n') };
+    const left = rows.filter(function (r) { return r.today && !r.done && r.kind === 'todo'; })
+      .sort(function (a, b) { return a.order - b.order; });
+    const lines = done.map(function (r) { return '・' + r.title; });
+    lines.push(left.length ? '来週へ ★' + left.length + '（一番上：' + left[0].title + '）' : '来週へ持ち越す★はなし。手放しで休んでよい');
+    return { key: 'week', title: '今週 ' + done.length + ' 斬った', body: lines.join('\n') };
   } catch (e) { return null; }
 }
