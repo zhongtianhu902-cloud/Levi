@@ -25,6 +25,7 @@ function doGet(e) {
   const key = PropertiesService.getScriptProperties().getProperty('LEVI_KEY');
   const given = e && e.parameter ? e.parameter.k : '';
   if (!key || given !== key) return json_({ error: 'unauthorized' });
+  if (e.parameter.a === 'todo') return json_(todoList_()); // 待受（Scriptable）用：ToDoだけ軽く
   if (e.parameter.a) return json_(pushGet_(e.parameter.a)); // 通知の鍵・受け箱
 
   const now = new Date();
@@ -43,7 +44,11 @@ function doGet(e) {
     events = events.concat(planned);
   } catch (err) { planError = String(err); }
 
-  return json_({ now: now.toISOString(), events: events, planned: planned.length, planError: planError });
+  // ToDo（今日の部屋）。スプレッドシートの許可がまだなら、予定だけ返して理由を添える
+  let todos;
+  try { todos = todoList_(); } catch (err) { todos = { error: String(err) }; }
+
+  return json_({ now: now.toISOString(), events: events, planned: planned.length, planError: planError, todos: todos });
 }
 
 function toObj_(ev) {
@@ -64,6 +69,7 @@ function toObj_(ev) {
  * add:    { k, action:'add', items:[{ title, cat, allDay, date:'YYYY-MM-DD' | start, end (ISO), desc }] }
  * update: { k, action:'update', item:{ id, title, cat, allDay, date | start, end } }
  * delete: { k, action:'delete', ids:[...], any }  ※anyがなければリヴァイが入れた予定だけ消す
+ * todo:   { k, action:'todo', op:'add'|'set'|'order'|'del', ... }（下の todoPost_ を参照）
  * push:   { k, action:'push', sub:{endpoint}, off, name, cfg:{morning,noon,evening,lead,leadFamily}, test }
  */
 function doPost(e) {
@@ -72,6 +78,7 @@ function doPost(e) {
   const key = PropertiesService.getScriptProperties().getProperty('LEVI_KEY');
   if (!key || body.k !== key) return json_({ error: 'unauthorized' });
   if (body.action === 'push') return json_(pushPost_(body)); // 通知の端末登録・時刻・ためし送信
+  if (body.action === 'todo') return json_(todoPost_(body)); // ToDo（積む・今日・並べ替え・斬る）
   const cal = CalendarApp.getDefaultCalendar();
 
   if (body.action === 'add') {
@@ -295,6 +302,7 @@ function setup() {
   }
   CalendarApp.getDefaultCalendar(); // カレンダーの許可を求めるため
   Logger.log('合言葉: ' + key);
+  Logger.log('ToDoの置き場所: ' + todoSheet_().getParent().getUrl()); // スプレッドシートの許可を求め、なければ作る
 }
 
 function json_(obj) {
@@ -421,6 +429,7 @@ function nudgesBetween_(evs, from, to, cfg, wx) {
   if (inWin(at(cfg.morning))) out.push(morningNudge_(evs, to, wx()));
   if (inWin(at(cfg.noon))) out.push(noonNudge_(evs, to));
   if (inWin(at(cfg.evening))) out.push(eveningNudge_(evs, to));
+  if (to.getDay() === 5 && inWin(at(WEEK_AT))) out.push(weekNudge_(to)); // 金曜の夜：今週斬ったもの
   evs.forEach(function (e) {
     if (e.allDay || NO_BEFORE.test(e.title)) return;
     const s = new Date(e.start), lead = e.cat === 'family' ? +cfg.leadFamily : +cfg.lead;
@@ -463,6 +472,7 @@ function morningNudge_(evs, now, wx) {
   if (d) lines.push('やる：' + hm_(d.start) + '〜 ' + d.name + (stage_(d) ? '（' + stage_(d) + 'まで）' : ''));
   const dl = dlLine_(evs, now); if (dl) lines.push(dl);
   (weatherLines_(t, now, wx) || []).forEach(function (w) { lines.push(w); });
+  const td = todoLine_(); if (td) lines.push(td);
   return { key: 'morning', title: 'おはよう。今日は' + (timed.length ? timed.length + '件' : '決まった予定なし'), body: lines.join('\n') || '自分のための時間にしてよい日' };
 }
 
@@ -629,4 +639,123 @@ function vapidJwt_(aud, privHex) {
   const jwt = head + '.' + b64u_(es256_(utf8_(head), privHex));
   cache.put(ck, jwt, 6 * 3600);
   return jwt;
+}
+
+// ---------- ToDo（今日の部屋） ----------
+// スプレッドシート「Levi ToDo」に置く（初めて使うときに自分のドライブへ作る）。Macで開いて直接直してもよい
+// 今日＝★（星をつけたもの）。並び＝今日の部屋での順番。済み＝斬った日時（消さずに残し、週の数に使う）
+const TODO_HEAD = ['id', '題名', '締切', '今日', '並び', '済み', '入れた', '種類'];
+const TODO_TZ = 'Asia/Tokyo';
+
+function todoSheet_() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('TODO_SHEET');
+  let ss = null;
+  if (id) { try { ss = SpreadsheetApp.openById(id); } catch (e) { ss = null; } }
+  if (!ss) {
+    ss = SpreadsheetApp.create('Levi ToDo');
+    props.setProperty('TODO_SHEET', ss.getId());
+    const sh = ss.getSheets()[0];
+    sh.setName('ToDo');
+    sh.getRange('A:H').setNumberFormat('@'); // 日付が勝手に変わらないよう、全部文字として持つ
+    sh.getRange(1, 1, 1, TODO_HEAD.length).setValues([TODO_HEAD]).setFontWeight('bold');
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(2, 320);
+  }
+  return ss.getSheets()[0];
+}
+
+function todoRows_(sh) {
+  const n = sh.getLastRow() - 1;
+  if (n < 1) return [];
+  return sh.getRange(2, 1, n, TODO_HEAD.length).getDisplayValues().map(function (r, i) {
+    return { row: i + 2, id: r[0], title: r[1], due: r[2], today: !!String(r[3]).trim(), order: +r[4] || 0,
+      done: r[5], added: r[6], kind: r[7] || 'todo' };
+  }).filter(function (r) { return r.id && r.title; });
+}
+
+const stamp_ = function (d) { return Utilities.formatDate(d, TODO_TZ, 'yyyy-MM-dd HH:mm'); };
+const weekStart_ = function (now) { return ymd_(addD_(now, -((now.getDay() + 6) % 7))); }; // 月曜
+
+/** アプリに渡す形：まだ済んでいないToDoと、今週斬った数 */
+function todoList_(rows) {
+  rows = rows || todoRows_(todoSheet_());
+  const mon = weekStart_(new Date());
+  return {
+    items: rows.filter(function (r) { return !r.done && r.kind === 'todo'; }).map(function (r) {
+      return { id: r.id, title: r.title, due: r.due, today: r.today, order: r.order, added: r.added };
+    }),
+    week: rows.filter(function (r) { return r.done && r.done >= mon && r.kind === 'todo'; }).length
+  };
+}
+
+/**
+ * add:   { items:[{ id?, title, due:'YYYY-MM-DD'|'', today }] }
+ * set:   { id, title?, due?, today?, done? }   today:true は今日の一番下へ、done:true で斬る（false で戻す）
+ * order: { ids:[...] }   今日の部屋の上からの順
+ * del:   { id }
+ */
+function todoPost_(b) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sh = todoSheet_(), rows = todoRows_(sh), now = new Date();
+    const byId = {};
+    rows.forEach(function (r) { byId[r.id] = r; });
+    let last = 0;
+    rows.forEach(function (r) { if (r.today && !r.done) last = Math.max(last, r.order); });
+
+    if (b.op === 'add') {
+      const vals = (b.items || []).filter(function (it) { return String(it.title || '').trim(); }).map(function (it) {
+        const id = it.id && !byId[it.id] ? String(it.id) : Utilities.getUuid().slice(0, 8);
+        return [id, String(it.title).trim(), it.due || '', it.today ? '★' : '', it.today ? String(++last) : '', '', stamp_(now), it.kind || 'todo'];
+      });
+      if (vals.length) sh.getRange(sh.getLastRow() + 1, 1, vals.length, TODO_HEAD.length).setValues(vals);
+      return { ok: true, ids: vals.map(function (v) { return v[0]; }) };
+    }
+
+    const r = byId[b.id];
+    if (b.op === 'set' || b.op === 'del') { if (!r) return { error: 'ToDoが見つかりません（スプレッドシートで消されたかも）' }; }
+
+    if (b.op === 'set') {
+      const v = [r.title, r.due, r.today ? '★' : '', r.order ? String(r.order) : '', r.done];
+      if (b.title != null) v[0] = String(b.title).trim() || r.title;
+      if (b.due != null) v[1] = b.due;
+      if (b.today != null) { v[2] = b.today ? '★' : ''; v[3] = b.today ? (r.today ? v[3] : String(last + 1)) : ''; }
+      if (b.done != null) v[4] = b.done ? stamp_(now) : '';
+      sh.getRange(r.row, 2, 1, 5).setValues([v]);
+      return { ok: true };
+    }
+    if (b.op === 'order') {
+      (b.ids || []).forEach(function (id, i) { if (byId[id]) sh.getRange(byId[id].row, 5).setValue(String(i + 1)); });
+      return { ok: true };
+    }
+    if (b.op === 'del') { sh.deleteRow(r.row); return { ok: true }; }
+    return { error: 'unknown op' };
+  } finally { lock.releaseLock(); }
+}
+
+/** 朝の声かけに足す一行 */
+function todoLine_() {
+  try {
+    const items = todoList_().items;
+    const today = items.filter(function (t) { return t.today; }).sort(function (a, b) { return a.order - b.order; });
+    if (today.length) return 'ToDo：今日の分 ' + today.length + 'つ（一番上：' + today[0].title + '）';
+    return items.length ? 'ToDo：積んでいるのは ' + items.length + 'つ。☆で今日の分を選ぶ' : '';
+  } catch (e) { return ''; }
+}
+
+/** 金曜の夜：今週斬った数と一覧、来週に持ち越す★の数と一番上（本人の希望：C） */
+const WEEK_AT = '20:30';
+function weekNudge_(now) {
+  try {
+    const mon = weekStart_(now), rows = todoRows_(todoSheet_());
+    const done = rows.filter(function (r) { return r.done && r.done >= mon && r.kind === 'todo'; })
+      .sort(function (a, b) { return a.done < b.done ? -1 : 1; });
+    const left = rows.filter(function (r) { return r.today && !r.done && r.kind === 'todo'; })
+      .sort(function (a, b) { return a.order - b.order; });
+    const lines = done.map(function (r) { return '・' + r.title; });
+    lines.push(left.length ? '来週へ ★' + left.length + '（一番上：' + left[0].title + '）' : '来週へ持ち越す★はなし。手放しで休んでよい');
+    return { key: 'week', title: '今週 ' + done.length + ' 斬った', body: lines.join('\n') };
+  } catch (e) { return null; }
 }
