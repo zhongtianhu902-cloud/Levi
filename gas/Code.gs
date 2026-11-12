@@ -429,6 +429,7 @@ function nudgesBetween_(evs, from, to, cfg, wx) {
   if (inWin(at(cfg.morning))) out.push(morningNudge_(evs, to, wx()));
   if (inWin(at(cfg.noon))) out.push(noonNudge_(evs, to));
   if (inWin(at(cfg.evening))) out.push(eveningNudge_(evs, to));
+  if (to.getDay() === 5 && inWin(at(WEEK_AT))) out.push(weekNudge_(to)); // 金曜の夜：今週斬ったもの
   evs.forEach(function (e) {
     if (e.allDay || NO_BEFORE.test(e.title)) return;
     const s = new Date(e.start), lead = e.cat === 'family' ? +cfg.leadFamily : +cfg.lead;
@@ -742,4 +743,16 @@ function todoLine_() {
     if (today.length) return 'ToDo：今日の分 ' + today.length + 'つ（一番上：' + today[0].title + '）';
     return items.length ? 'ToDo：積んでいるのは ' + items.length + 'つ。☆で今日の分を選ぶ' : '';
   } catch (e) { return ''; }
+}
+
+/** 金曜の夜：今週斬った数と、斬ったものの一覧（本人の希望：数＋一覧） */
+const WEEK_AT = '20:30';
+function weekNudge_(now) {
+  try {
+    const mon = weekStart_(now);
+    const done = todoRows_(todoSheet_()).filter(function (r) { return r.done && r.done >= mon && r.kind === 'todo'; })
+      .sort(function (a, b) { return a.done < b.done ? -1 : 1; });
+    if (!done.length) return { key: 'week', title: '今週斬ったのは 0', body: '来週は☆を1つだけ選ぶところから' };
+    return { key: 'week', title: '今週 ' + done.length + ' 斬った', body: done.map(function (r) { return '・' + r.title; }).join('\n') };
+  } catch (e) { return null; }
 }
