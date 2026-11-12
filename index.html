@@ -188,10 +188,37 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
   align-items: center; justify-content: space-between; gap: 10px; }
 #undo b { color: var(--calm); font-variant-numeric: tabular-nums; }
 #undo button { font: inherit; font-size: 14px; border: 0; border-radius: 99px; padding: 6px 14px; background: var(--bg); color: var(--text); }
+/* 今日の部屋（ToDo） */
+.say { font-size: 17px; font-weight: 600; line-height: 1.5; margin-bottom: 14px; }
+.say small { display: block; font-size: 13px; font-weight: 400; color: var(--sub); }
+.tlist { list-style: none; display: grid; gap: 8px; margin-bottom: 14px; }
+.todo { display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 10px 6px 10px 6px; font-size: 17px; line-height: 1.4; }
+.todo .tt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.todo .tt small { display: block; font-size: 12px; color: var(--sub); }
+.todo.hot .tt, .todo.hot .tt small { color: var(--hot); } .todo.hot .tt { font-weight: 700; }
+.todo .no { width: 22px; text-align: center; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.star { font: inherit; font-size: 22px; line-height: 1; background: none; border: 0; color: var(--muted); width: 36px; height: 36px; flex: 0 0 36px; }
+.star.on { color: var(--warn); }
+.grip { font-size: 22px; line-height: 1; color: var(--muted); padding: 8px 8px; touch-action: none; cursor: grab; -webkit-user-select: none; user-select: none; }
+.todo.dragging { position: relative; z-index: 2; box-shadow: 0 10px 26px rgba(0,0,0,.22); }
+.tlist.sorting .todo:not(.dragging) { transition: transform .15s; }
+#pile { display: none; position: fixed; inset: 0; background: var(--bg); overflow-y: auto; z-index: 4;
+  padding: calc(env(safe-area-inset-top) + 18px) 16px calc(env(safe-area-inset-bottom) + 30px); }
+#pile .pin { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 6px; }
+#pileIn { flex: 1; min-width: 0; min-height: 48px; font: inherit; font-size: 17px; padding: 11px 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--card); color: var(--text); resize: vertical; }
+#pile .pin .btn { margin: 0; }
+#pile h2 { font-size: 13px; letter-spacing: .12em; color: var(--sub); margin: 14px 0 8px; font-weight: 600; }
+.pilebtn { font: inherit; font-size: 14px; background: var(--card); border: 1px solid var(--line); color: var(--text); border-radius: 99px; padding: 4px 12px; }
+#pile [data-id], #pages .todo { touch-action: pan-y; }
 </style>
 </head>
 <body>
 <div id="pages">
+  <section class="page" id="pT">
+    <div class="head"><h1>今日</h1><span><span class="clock" id="dateT"></span> <button class="pilebtn" id="pileBtn">積む <b id="pileN"></b></button></span></div>
+    <div id="T"></div>
+  </section>
   <section class="page" id="pA">
     <div class="head"><h1>いま</h1><span><span class="clock" id="clock"></span> <button class="calbtn" aria-label="月の暦">🗓</button> <button id="gear" aria-label="設定">⚙︎</button></span></div>
     <div id="banner"></div>
@@ -206,14 +233,14 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
     <div id="C"></div>
   </section>
 </div>
-<div id="dots"><span class="on"></span><span></span><span></span></div>
+<div id="dots"><span></span><span class="on"></span><span></span><span></span></div>
 
 <button id="plus" aria-label="予定を入れる">＋</button>
 <div id="toast" role="status"></div>
 <div id="undo" role="status"><span id="undoMsg"></span><button id="undoBtn">戻す</button></div>
 <div id="add">
   <div class="head"><h1 id="addTitle">予定を入れる</h1><button id="addClose" class="btn ghost" style="margin:0;padding:6px 14px">閉じる</button></div>
-  <p class="note" id="addHint">一言でどうぞ。何行でも入れられます。<br>例：10/27までに初任研指導報告書修正　／　明日18時 みゆ迎え　／　来週火曜16:45 分会会議</p>
+  <p class="note" id="addHint">一言でどうぞ。何行でも入れられます。<br>例：10/27までに初任研指導報告書修正　／　明日18時 みゆ迎え　／　来週火曜16:45 分会会議<br>ToDoは頭に「リヴァイ」か「ToDo」：リヴァイ 引き出し掃除　／　ToDo 11/20まで 小教研</p>
   <p class="note" id="addPreset" style="display:none;margin-top:10px;color:var(--text)"></p>
   <textarea id="inText" placeholder="なにを・いつ"></textarea>
   <button id="read" class="btn">読む</button>
@@ -227,6 +254,13 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
   <nav class="mtabs" id="calT"></nav>
   <div id="calM"></div>
   <p class="note" style="font-size:12px">日付を押すと、その日に予定を入れられます。予定を長押しすると直せます。済んだら右へ引いて斬れます。</p>
+</div>
+
+<div id="pile">
+  <div class="head"><h1>積む</h1><button id="pileClose" class="btn ghost" style="margin:0;padding:6px 14px">閉じる</button></div>
+  <div class="pin"><textarea id="pileIn" rows="1" placeholder="やること（何行でも）"></textarea><button id="pileAdd" class="btn">積む</button></div>
+  <p class="note" style="font-size:12px;margin-bottom:6px">「11/20まで」のように書けば締切つき。☆で今日の分へ。右へ引くと斬れます。長押しで直す・消す。</p>
+  <div id="pileL"></div>
 </div>
 
 <div id="setup">
@@ -619,8 +653,9 @@ function render() {
   const now = new Date();
   document.getElementById('clock').textContent = hm(now);
   const live = EVENTS.filter(e => !e.done); // 斬ったものは いま・川・地平線 に出さない（暦には線を引いて残す）
-  renderA(live, now); renderB(live, now); renderC(live, now);
+  renderT(live, now); renderA(live, now); renderB(live, now); renderC(live, now);
   if (calOpen) renderCal();
+  if (pileOpen) renderPile();
 }
 async function load() {
   loadWx().then(render);
@@ -628,11 +663,12 @@ async function load() {
   const banner = document.getElementById('banner');
   if (!url || !key) {
     EVENTS = demoEvents().map((r, j) => shape({ id: 'demo-s' + j, ...r }));
+    if (!TODOS.length) TODOS = demoTodos();
     banner.textContent = 'サンプル表示中（⚙︎から設定すると自分の予定になります）'; banner.style.display = 'block';
     return render();
   }
   const cached = store.get('levi_cache');
-  if (cached) { try { EVENTS = JSON.parse(cached).events.map(shape); render(); } catch (e) {} }
+  if (cached) { try { const c = JSON.parse(cached); EVENTS = c.events.map(shape); takeTodos(c); render(); } catch (e) {} }
   try {
     let data;
     try {
@@ -644,7 +680,7 @@ async function load() {
     if (data.error === 'unauthorized') throw new Error('合言葉が違います');
     if (data.error) throw new Error(data.error);
     store.set('levi_cache', JSON.stringify(data));
-    EVENTS = data.events.map(shape); banner.style.display = 'none';
+    EVENTS = data.events.map(shape); takeTodos(data); banner.style.display = 'none';
   } catch (e) {
     banner.textContent = (cached ? '最新の予定を取れませんでした（前回の内容を表示中）：' : '予定を取れませんでした：') + e.message;
     banner.style.display = 'block';
@@ -744,7 +780,7 @@ document.getElementById('pushTest').onclick = async () => {
 };
 // 通知を押して開いたら A「いま」へ
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.addEventListener('message', ev => { if (ev.data === 'goA') { setup.style.display = 'none'; go(0); load(); } });
+  navigator.serviceWorker.addEventListener('message', ev => { if (ev.data === 'goA') { setup.style.display = 'none'; go(PAGE_A); load(); } });
   navigator.serviceWorker.getRegistration().then(r => { if (r) swReady(); }).catch(() => {});
 }
 
@@ -775,8 +811,15 @@ document.getElementById('plus').onclick = () => openAdd(null);
 document.getElementById('addClose').onclick = () => { sheet.style.display = 'none'; };
 document.getElementById('read').onclick = () => {
   const now = new Date();
-  const lines = inText.value.split(/\n+/).map(x => x.trim()).filter(Boolean);
+  let lines = inText.value.split(/\n+/).map(x => x.trim()).filter(Boolean);
   if (!lines.length) return;
+  // 「リヴァイ 〇〇」「ToDo 〇〇」はToDoへ。「リヴァイ 予定に追加 …」「リヴァイ 締め切り …」は予定として読む
+  const routed = lines.map(routeLine), todo = routed.filter(r => r.todo).map(r => r.text);
+  lines = routed.filter(r => !r.todo).map(r => r.text);
+  if (todo.length) {
+    todoAdd(todo);
+    if (!lines.length) { inText.value = ''; sheet.style.display = 'none'; return; }
+  }
   const fresh = lines.map(l => {
     const p = parseLine(l, now);
     if (!p.date && presetDate) p.date = presetDate;
@@ -968,17 +1011,215 @@ function renderCal() {
   document.getElementById('calM').innerHTML = months;
 }
 
+// ---------- 今日の部屋（ToDo） ----------
+// 積む（全部）→ ☆で今日の分を選ぶ → 今日の部屋で ≡ をつまんで並べ替え → 上から右へ引いて斬る
+// 置き場所は Apps Script が作るスプレッドシート「Levi ToDo」。斬ったら今日の部屋から消え、週の数に入る
+const PAGE_A = 1;
+let TODOS = [], WEEK = 0, TODO_ERR = '', pileOpen = false;
+const TODO_RE = /^(?:todo|to do|やる|タスク|task)\s*[:：、,]?\s*/i;
+const LEVI_RE = /^(?:リヴァイ|リバイ|りゔぁい|りばい|levi)\s*[:：、,。]?\s*/i;
+function takeTodos(data) {
+  const t = data && data.todos;
+  if (!t) { TODO_ERR = 'ToDoを使うには、Code.gsを貼り直して新バージョンでデプロイし、setup を1回実行してください'; return; }
+  if (t.error) { TODO_ERR = 'ToDoを読めません（setup を1回実行して、スプレッドシートの許可を出してください）：' + t.error; return; }
+  TODO_ERR = ''; TODOS = t.items || []; WEEK = t.week || 0;
+}
+function routeLine(l) {
+  const s = l.normalize('NFKC').trim();
+  if (TODO_RE.test(s)) return { todo: true, text: s.replace(TODO_RE, '') };
+  if (LEVI_RE.test(s)) {
+    const r = s.replace(LEVI_RE, '');
+    if (/^予定(?:に追加|追加)?\s*[:：、,]?\s*/.test(r)) return { todo: false, text: r.replace(/^予定(?:に追加|追加)?\s*[:：、,]?\s*/, '') };
+    if (/^(?:締め?切り?|〆切)\s*[:：、,]\s*/.test(r)) return { todo: false, text: r.replace(/^(?:締め?切り?|〆切)\s*[:：、,]\s*/, '') + ' 締切' };
+    return { todo: true, text: r };
+  }
+  return { todo: false, text: l };
+}
+// 「11/20まで 小教研」→ 題名と締切
+function parseTodo(text) {
+  const p = parseLine(text, new Date());
+  if (!p.date) return { title: text.trim(), due: '' };
+  const title = p.start == null ? baseTitle(p.title.replace(/\s*締切$/, '')) : '';
+  return { title: title || text.trim(), due: ymd(p.date) };
+}
+const daysTo = due => Math.round((new Date(due + 'T00:00') - startOfDay(new Date())) / 864e5);
+const isHot = t => !!t.due && daysTo(t.due) <= 3; // 赤＝締切が近い（3日以内・過ぎた）
+function dueLabel(due) {
+  const n = daysTo(due), d = new Date(due + 'T00:00');
+  return n < 0 ? `${md(d)}まで（${-n}日過ぎ）` : n === 0 ? '今日まで' : n === 1 ? '明日まで' : `${md(d)}まで（あと${n}日）`;
+}
+const todayList = () => TODOS.filter(t => t.today && !t.done).sort((a, b) => a.order - b.order);
+function todoRow(t, i) {
+  return `<li class="todo${isHot(t) ? ' hot' : ''}" data-id="todo:${esc(t.id)}">`
+    + `<button class="star${t.today ? ' on' : ''}" data-star="${esc(t.id)}" aria-label="${t.today ? '今日から外す' : '今日やる'}">${t.today ? '★' : '☆'}</button>`
+    + `<span class="tt">${esc(t.title)}${t.due ? `<small>${dueLabel(t.due)}</small>` : ''}</span>`
+    + (i != null ? '<span class="grip" aria-label="並べ替え">≡</span>' : '') + '</li>';
+}
+// Leviの一言：今日の予定だけを見る
+function todaySay(n, live, now) {
+  if (!n) return '';
+  const night = now.getHours() >= 21 || now.getHours() < 5;
+  if (night) return `今日はおしまい。残り${n}つは、この順のまま明日へ`;
+  const next = live.filter(e => !e.allDay && sameDay(e.start, now) && e.start > now && !isDo(e)).sort((a, b) => a.start - b.start)[0];
+  if (next) return `${hm(next.start)} ${esc(next.title)}まで　あと${n}つ<small>上から斬る。${hm(new Date(next.start - WRAP_UP_MIN * 6e4))}には切り上げ</small>`;
+  return `あと${n}つ<small>上から斬る</small>`;
+}
+function renderT(live, now) {
+  document.getElementById('dateT').textContent = md(now);
+  const list = todayList(), pile = TODOS.filter(t => !t.today && !t.done);
+  document.getElementById('pileN').textContent = pile.length || '';
+  let html = TODO_ERR ? `<p class="note" style="color:var(--warn);margin-bottom:10px">${esc(TODO_ERR)}</p>` : '';
+  html += list.length ? `<div class="say">${todaySay(list.length, live, now)}</div><ol class="tlist" id="todayL">${list.map(todoRow).join('')}</ol>`
+    : `<div class="empty">今日の分はまだ選んでいない<br><button class="btn" id="pickBtn" style="margin-top:14px">積むから☆で選ぶ</button></div>`;
+  html += `<div class="slain">今週斬った <b>${WEEK}</b></div>`;
+  document.getElementById('T').innerHTML = html;
+}
+function renderPile() {
+  const rest = TODOS.filter(t => !t.today && !t.done)
+    .sort((a, b) => (isHot(b) - isHot(a)) || ((a.due || '9') < (b.due || '9') ? -1 : (a.due || '9') > (b.due || '9') ? 1 : 0) || ((b.added || '') > (a.added || '') ? 1 : -1));
+  const today = todayList();
+  document.getElementById('pileL').innerHTML =
+    (today.length ? `<h2>今日（${today.length}）</h2><ol class="tlist">${today.map(t => todoRow(t)).join('')}</ol>` : '')
+    + `<h2>積んでいる（${rest.length}）</h2>`
+    + (rest.length ? `<ol class="tlist">${rest.map(t => todoRow(t)).join('')}</ol>` : '<p class="note">まだ何も積んでいない</p>');
+}
+const pileEl = document.getElementById('pile');
+function openPile() { pileOpen = true; renderPile(); pileEl.style.display = 'block'; }
+document.getElementById('pileBtn').onclick = openPile;
+document.getElementById('pileClose').onclick = () => { pileOpen = false; pileEl.style.display = 'none'; render(); };
+document.getElementById('T').addEventListener('click', ev => { if (ev.target.closest('#pickBtn')) openPile(); });
+document.getElementById('pileAdd').onclick = () => {
+  const el = document.getElementById('pileIn');
+  const lines = el.value.split(/\n+/).map(x => x.trim()).filter(Boolean).map(l => routeLine(l).text);
+  if (!lines.length) return;
+  el.value = ''; todoAdd(lines, true);
+};
+const newId = () => Math.random().toString(36).slice(2, 10);
+async function todoPost(body) {
+  if (!store.get('levi_url')) return { ok: true, demo: true };
+  return post({ action: 'todo', ...body });
+}
+async function todoAdd(lines, quiet) {
+  const items = lines.map(l => ({ id: newId(), ...parseTodo(l), today: false, order: 0, added: ymd(new Date()) + ' ' + hm(new Date()) }));
+  TODOS = items.concat(TODOS); render();
+  if (!quiet) toast(`積んだ：${items.map(t => t.title).join('、')}`);
+  try { await todoPost({ op: 'add', items }); }
+  catch (e) { TODOS = TODOS.filter(t => !items.includes(t)); render(); toast('積めませんでした：' + errMsg(e)); }
+}
+// ☆：今日の一番下へ／★：積むへ戻す
+document.addEventListener('click', async ev => {
+  const b = ev.target.closest('[data-star]');
+  if (!b) return;
+  const t = TODOS.find(x => x.id === b.dataset.star);
+  if (!t) return;
+  const was = { today: t.today, order: t.order };
+  t.today = !t.today; t.order = t.today ? Math.max(0, ...todayList().filter(x => x !== t).map(x => x.order)) + 1 : 0;
+  if (t.today) buzz();
+  render();
+  try { await todoPost({ op: 'set', id: t.id, today: t.today }); }
+  catch (e) { Object.assign(t, was); render(); toast('変えられませんでした：' + errMsg(e)); }
+});
+async function todoDone(t) {
+  t.done = true; WEEK++;
+  const n = slainToday() + 1;
+  store.set(slainKey(), String(n));
+  render();
+  const left = todayList().length;
+  showUndo(`斬った。今日 <b>${n}</b>つ目${t.today ? (left ? `　あと${left}つ` : '　今日の分は片付いた') : ''}　${SLASH_LINES[Math.floor(Math.random() * SLASH_LINES.length)]}`, async () => {
+    t.done = false; WEEK = Math.max(0, WEEK - 1); store.set(slainKey(), String(Math.max(0, slainToday() - 1))); render();
+    try { await todoPost({ op: 'set', id: t.id, done: false }); } catch (err) { toast('戻せませんでした：' + errMsg(err)); }
+  });
+  try { await todoPost({ op: 'set', id: t.id, done: true }); }
+  catch (err) { t.done = false; WEEK = Math.max(0, WEEK - 1); store.set(slainKey(), String(Math.max(0, slainToday() - 1))); render(); hideUndo(); toast('斬れませんでした：' + errMsg(err)); }
+}
+// 長押し：直す・消す
+async function todoEdit(id) {
+  const t = TODOS.find(x => x.id === id);
+  if (!t) return;
+  const v = prompt('直す（空にすると消す）\n締切は「11/20まで」のように', t.title + (t.due ? ` ${+t.due.slice(5, 7)}/${+t.due.slice(8)}まで` : ''));
+  if (v === null) return;
+  if (!v.trim()) {
+    if (!confirm(`「${t.title}」を消します。よろしいですか？`)) return;
+    const i = TODOS.indexOf(t); TODOS.splice(i, 1); render();
+    try { await todoPost({ op: 'del', id }); } catch (e) { TODOS.splice(i, 0, t); render(); toast('消せませんでした：' + errMsg(e)); }
+    return;
+  }
+  const was = { title: t.title, due: t.due }, p = parseTodo(v);
+  Object.assign(t, p); render();
+  try { await todoPost({ op: 'set', id, title: p.title, due: p.due }); }
+  catch (e) { Object.assign(t, was); render(); toast('直せませんでした：' + errMsg(e)); }
+}
+// ≡ をつまんで上下に動かす（Wunderlistの「今日」でできて、Microsoft To Doで消えたもの）
+let drag = null;
+document.addEventListener('pointerdown', ev => {
+  const g = ev.target.closest('#todayL .grip');
+  if (!g) return;
+  ev.preventDefault();
+  const li = g.closest('li'), ol = li.parentElement, items = [...ol.children];
+  try { g.setPointerCapture(ev.pointerId); } catch (e) {}
+  const rects = items.map(x => x.getBoundingClientRect());
+  const step = items.length > 1 ? rects[1].top - rects[0].top : rects[0].height;
+  drag = { g, li, ol, items, rects, step, y0: ev.clientY, from: items.indexOf(li), to: items.indexOf(li), pid: ev.pointerId };
+  li.classList.add('dragging'); ol.classList.add('sorting'); buzz();
+});
+document.addEventListener('pointermove', ev => {
+  if (!drag || ev.pointerId !== drag.pid) return;
+  ev.preventDefault();
+  const { li, items, rects, from, step } = drag, dy = ev.clientY - drag.y0;
+  li.style.transform = `translateY(${dy}px)`;
+  const mid = rects[from].top + rects[from].height / 2 + dy;
+  let to = from;
+  rects.forEach((r, j) => {
+    const c = r.top + r.height / 2;
+    if (j < from && mid < c) to = Math.min(to, j);
+    if (j > from && mid > c) to = Math.max(to, j);
+  });
+  if (to !== drag.to) buzz();
+  drag.to = to;
+  items.forEach((x, j) => {
+    if (x === li) return;
+    x.style.transform = j >= to && j < from ? `translateY(${step}px)` : j <= to && j > from ? `translateY(${-step}px)` : '';
+  });
+}, { passive: false });
+function dragEnd(ev) {
+  if (!drag || (ev && ev.pointerId !== drag.pid)) return;
+  const { li, ol, items, from, to } = drag;
+  drag = null;
+  items.forEach(x => { x.style.transform = ''; });
+  li.classList.remove('dragging'); ol.classList.remove('sorting');
+  if (to === from) return;
+  const list = todayList(), [moved] = list.splice(from, 1);
+  list.splice(to, 0, moved);
+  list.forEach((t, i) => { t.order = i + 1; });
+  render();
+  todoPost({ op: 'order', ids: list.map(t => t.id) }).catch(e => toast('並びを保存できませんでした：' + errMsg(e)));
+}
+document.addEventListener('pointerup', dragEnd);
+document.addEventListener('pointercancel', dragEnd);
+function demoTodos() {
+  const d = n => ymd(addDays(new Date(), n));
+  return [
+    { id: 'd1', title: '教材選定書類作成', due: d(1), today: true, order: 1 },
+    { id: 'd2', title: '小教研 提出', due: d(3), today: true, order: 2 },
+    { id: 'd3', title: 'マンガン電池60個注文', due: '', today: true, order: 3 },
+    { id: 'd4', title: '明野中央公民館に回答', due: '', today: false, order: 0 },
+    { id: 'd5', title: '教育実習の割り当て', due: d(9), today: false, order: 0 },
+    { id: 'd6', title: '月の観察動画スライド', due: '', today: false, order: 0 }
+  ].map(t => ({ ...t, added: '' }));
+}
+
 // ---------- 長押しで直す ----------
 let pressT = null, pressEl = null, pressXY = null;
 function pressEnd() { clearTimeout(pressT); pressT = null; if (pressEl) pressEl.classList.remove('pressing'); pressEl = null; }
 document.addEventListener('pointerdown', ev => {
-  const el = ev.target.closest('#pages [data-id], #cal [data-id]');
-  if (!el) return;
+  const el = ev.target.closest('#pages [data-id], #cal [data-id], #pile [data-id]');
+  if (!el || ev.target.closest('.grip, .star')) return;
   pressEl = el; pressXY = [ev.clientX, ev.clientY]; el.classList.add('pressing');
   pressT = setTimeout(() => {
     const id = el.dataset.id; pressEnd();
     // 古いApps Scriptは予定のIDを返さないので直せない。黙って何もしないと分からないので伝える
     if (!id) toast('この予定を直すには、Apps Scriptを新しいバージョンでデプロイし直してください');
+    else if (id.startsWith('todo:')) todoEdit(id.slice(5));
     else openEdit(id);
   }, 500);
 });
@@ -988,18 +1229,19 @@ document.addEventListener('pointermove', ev => {
 ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => document.addEventListener(t, pressEnd));
 pages.addEventListener('scroll', pressEnd, { passive: true });
 document.getElementById('cal').addEventListener('scroll', pressEnd, { passive: true });
+document.getElementById('pile').addEventListener('scroll', pressEnd, { passive: true });
 document.addEventListener('contextmenu', ev => { if (ev.target.closest('[data-id]')) ev.preventDefault(); });
 
 // ---------- 斬る（済んだら右へ引く） ----------
 const SLASH_LINES = ['よし。', '次だ。', '上出来だ。', '片付いたな。', '悪くない。', 'その調子だ。'];
 const slainKey = () => 'levi_slain_' + ymd(new Date());
 const slainToday = () => +(store.get(slainKey()) || 0);
-const SLASH_SEL = '#pages [data-id], #cal .agenda [data-id], #cal .det [data-id]';
+const SLASH_SEL = '#pages [data-id], #cal .agenda [data-id], #cal .det [data-id], #pile [data-id]';
 let swEl = null, swX = 0, swY = 0, swDx = 0, swOn = false, swPage = 0, swT = 0, swV = 0;
 // 指はtouchで扱う（pointerだと、少しでも縦に動いた瞬間にSafariがスクロールに取ってしまい斬れない）
 function swStart(target, x, y) {
   const el = target.closest && target.closest(SLASH_SEL);
-  if (!el || !el.dataset.id || el.classList.contains('donex')) return;
+  if (!el || !el.dataset.id || el.classList.contains('donex') || target.closest('.grip')) return;
   swEl = el; swX = x; swY = y; swDx = 0; swOn = false; swV = 0; swT = performance.now();
   swPage = Math.round(pages.scrollLeft / pages.clientWidth);
   wakeAudio();
@@ -1027,7 +1269,7 @@ function swEnd(x, y, cancel) {
   if (!swOn) {
     // 予定の上では左右のページ送りが効かないので、左へ払ったら次のページへ
     const dx = x - swX, dy = y - swY;
-    if (!cancel && el.closest('#pages') && dx < -50 && -dx > Math.abs(dy) * 1.5) go(Math.min(2, swPage + 1));
+    if (!cancel && el.closest('#pages') && dx < -50 && -dx > Math.abs(dy) * 1.5) go(Math.min(3, swPage + 1));
     return;
   }
   el.classList.remove('slashing', 'armed');
@@ -1056,11 +1298,21 @@ document.addEventListener('pointerup', ev => { if (ev.pointerType === 'mouse') s
 
 // 刃が走って、上下ふたつに割れて落ちる
 function slash(el) {
+  if (el.dataset.id.startsWith('todo:')) {
+    const t = TODOS.find(x => 'todo:' + x.id === el.dataset.id);
+    if (!t) return false;
+    slashFx(el); setTimeout(() => todoDone(t), 620);
+    return true;
+  }
   const e = EVENTS.find(x => x.id === el.dataset.id);
   if (!e) return false;
   // カレンダーの「直す」は日付をまるごと置き直すので、何日も続く予定・くり返しの予定は斬らない
   if (e.allDay && e.end - e.start > 864e5) { toast('何日も続く予定は斬れません（長押しで直すか消してください）'); return false; }
   if (EVENTS.filter(x => x.id === e.id).length > 1) { toast('くり返しの予定は斬れません（毎回分がまとめて済みになるため）'); return false; }
+  slashFx(el); setTimeout(() => markDone(e), 620);
+  return true;
+}
+function slashFx(el) {
   buzz(); shing();
   const r = el.getBoundingClientRect(), w = r.width, h = r.height, cut = 0.24;
   const blade = document.createElement('div');
@@ -1083,8 +1335,6 @@ function slash(el) {
   el.style.transform = ''; el.style.visibility = 'hidden'; el.style.overflow = 'hidden';
   el.animate([{ height: h + 'px' }, { height: '0px', marginTop: 0, marginBottom: 0, paddingTop: 0, paddingBottom: 0, borderWidth: 0 }],
     { duration: 280, delay: 300, easing: 'ease-in-out', fill: 'forwards' });
-  setTimeout(() => markDone(e), 620);
-  return true;
 }
 
 // カレンダーには消さずに「✓」を付けて残す（夜の振り返りで使う・戻せる）
@@ -1195,6 +1445,7 @@ async function removeEv(i) {
 }
 const errMsg = e => /JSON|fetch|Load failed/i.test(e.message) ? 'Apps Scriptを新しいバージョンでデプロイし直してください' : e.message;
 
+requestAnimationFrame(() => { pages.scrollLeft = PAGE_A * pages.clientWidth; syncDots(); }); // 開いたら A「いま」。左へ戻ると今日の部屋
 load();
 setInterval(render, 30 * 1000);       // 残り時間は30秒ごとに更新
 setInterval(load, 5 * 60 * 1000);     // 予定は5分ごとに取り直す
