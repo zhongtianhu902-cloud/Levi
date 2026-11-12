@@ -240,7 +240,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text);
 <div id="undo" role="status"><span id="undoMsg"></span><button id="undoBtn">戻す</button></div>
 <div id="add">
   <div class="head"><h1 id="addTitle">予定を入れる</h1><button id="addClose" class="btn ghost" style="margin:0;padding:6px 14px">閉じる</button></div>
-  <p class="note" id="addHint">一言でどうぞ。何行でも入れられます。<br>例：10/27までに初任研指導報告書修正　／　明日18時 みゆ迎え　／　来週火曜16:45 分会会議<br>ToDoは頭に「リヴァイ」か「ToDo」：リヴァイ 引き出し掃除　／　ToDo 11/20まで 小教研</p>
+  <p class="note" id="addHint">一言でどうぞ。何行でも入れられます。<br>例：10/27までに初任研指導報告書修正　／　明日18時 みゆ迎え　／　来週火曜16:45 分会会議<br>ToDoは頭に「追加」：追加、引き出し掃除　／　追加、11/20まで 小教研</p>
   <p class="note" id="addPreset" style="display:none;margin-top:10px;color:var(--text)"></p>
   <textarea id="inText" placeholder="なにを・いつ"></textarea>
   <button id="read" class="btn">読む</button>
@@ -813,7 +813,7 @@ document.getElementById('read').onclick = () => {
   const now = new Date();
   let lines = inText.value.split(/\n+/).map(x => x.trim()).filter(Boolean);
   if (!lines.length) return;
-  // 「リヴァイ 〇〇」「ToDo 〇〇」はToDoへ。「リヴァイ 予定に追加 …」「リヴァイ 締め切り …」は予定として読む
+  // 「追加、〇〇」「ToDo 〇〇」「リヴァイ 〇〇」はToDoへ。「リヴァイ 予定に追加 …」「リヴァイ 締め切り …」は予定として読む
   const routed = lines.map(routeLine), todo = routed.filter(r => r.todo).map(r => r.text);
   lines = routed.filter(r => !r.todo).map(r => r.text);
   if (todo.length) {
@@ -1016,7 +1016,7 @@ function renderCal() {
 // 置き場所は Apps Script が作るスプレッドシート「Levi ToDo」。斬ったら今日の部屋から消え、週の数に入る
 const PAGE_A = 1;
 let TODOS = [], WEEK = 0, TODO_ERR = '', pileOpen = false;
-const TODO_RE = /^(?:todo|to do|やる|タスク|task)\s*[:：、,]?\s*/i;
+const TODO_RE = /^(?:追加|todo|to do|やる|タスク|task)\s*[:：、,。]?\s*/i;
 const LEVI_RE = /^(?:リヴァイ|リバイ|りゔぁい|りばい|levi)\s*[:：、,。]?\s*/i;
 function takeTodos(data) {
   const t = data && data.todos;
