@@ -653,6 +653,14 @@ function todoSheet_() {
   let ss = null;
   if (id) { try { ss = SpreadsheetApp.openById(id); } catch (e) { ss = null; } }
   if (!ss) {
+    // 先に作られた「Levi ToDo」（声のClaudeが作った分など）があれば、それを使う
+    const it = DriveApp.getFilesByName('Levi ToDo');
+    while (!ss && it.hasNext()) {
+      const f = it.next();
+      if (f.getMimeType() === MimeType.GOOGLE_SHEETS && !f.isTrashed()) { ss = SpreadsheetApp.open(f); props.setProperty('TODO_SHEET', ss.getId()); }
+    }
+  }
+  if (!ss) {
     ss = SpreadsheetApp.create('Levi ToDo');
     props.setProperty('TODO_SHEET', ss.getId());
     const sh = ss.getSheets()[0];
@@ -662,7 +670,7 @@ function todoSheet_() {
     sh.setFrozenRows(1);
     sh.setColumnWidth(2, 320);
   }
-  return ss.getSheets()[0];
+  return ss.getSheetByName('ToDo') || ss.getSheets()[0];
 }
 
 function todoRows_(sh) {
