@@ -26,6 +26,7 @@ function doGet(e) {
   const given = e && e.parameter ? e.parameter.k : '';
   if (!key || given !== key) return json_({ error: 'unauthorized' });
   if (e.parameter.a === 'todo') return json_(todoList_()); // 待受（Scriptable）用：ToDoだけ軽く
+  if (e.parameter.a === 'add') return ContentService.createTextOutput(todoSay_(e.parameter.t)); // Siriのショートカット「追加」用：返すのは読み上げる一言だけ
   if (e.parameter.a) return json_(pushGet_(e.parameter.a)); // 通知の鍵・受け箱
 
   const now = new Date();
@@ -766,4 +767,12 @@ function weekNudge_(now) {
     lines.push(left.length ? '来週へ ★' + left.length + '（一番上：' + left[0].title + '）' : '来週へ持ち越す★はなし。手放しで休んでよい');
     return { key: 'week', title: '今週 ' + done.length + ' 斬った', body: lines.join('\n') };
   } catch (e) { return null; }
+}
+
+/** Siriのショートカット「追加」：声で言ったものを積み、読み上げる一言を返す */
+function todoSay_(text) {
+  const t = String(text || '').replace(/^\s*(?:追加|ついか)\s*[、,。:：]?\s*/, '').replace(/[。．.]+$/, '').trim();
+  if (!t) return '聞き取れなかった。もう一度';
+  const r = todoPost_({ op: 'add', items: [{ title: t }] });
+  return r.ok ? '積んだ。' + t : '積めなかった。' + (r.error || '');
 }
